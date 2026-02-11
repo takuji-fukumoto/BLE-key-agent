@@ -1,0 +1,4 @@
+# pynput PoC 用 requirements
+
+# キーボード・マウス監視ライブラリ
+pynput>=1.7.6
