@@ -43,25 +43,32 @@ async def scan_devices(timeout: float = 5.0, show_only: bool = False):
     print(f"BLEデバイスをスキャン中... ({timeout}秒)")
     print("-" * 60)
 
-    devices = await BleakScanner.discover(timeout=timeout)
+    devices = await BleakScanner.discover(
+        timeout=timeout, return_adv=True
+    )
     if not devices:
         print("デバイスが見つかりませんでした")
         return []
 
-    sorted_devices = sorted(devices, key=lambda d: d.rssi or -100, reverse=True)
+    # discover(return_adv=True) は {BLEDevice: AdvertisementData} の辞書を返す
+    device_adv_pairs = [
+        (device, adv) for device, adv in devices.values()
+    ]
+    device_adv_pairs.sort(key=lambda p: p[1].rssi or -100, reverse=True)
 
-    for i, device in enumerate(sorted_devices, 1):
-        rssi = device.rssi or "N/A"
-        name = device.name or "(名前なし)"
+    for i, (device, adv) in enumerate(device_adv_pairs, 1):
+        rssi = adv.rssi if adv.rssi is not None else "N/A"
+        name = device.name or adv.local_name or "(名前なし)"
         print(f"  [{i:2d}] {name:30s}  {device.address}  RSSI: {rssi}")
 
     print("-" * 60)
-    print(f"合計 {len(sorted_devices)} デバイス")
+    print(f"合計 {len(device_adv_pairs)} デバイス")
 
     if show_only:
         return []
 
-    return sorted_devices
+    # BLEDeviceのリストだけを返す（選択用）
+    return [device for device, _adv in device_adv_pairs]
 
 
 async def select_device(timeout: float = 10.0):

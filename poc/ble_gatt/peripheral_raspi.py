@@ -80,7 +80,8 @@ async def run(loop: asyncio.AbstractEventLoop) -> None:
     }
 
     # サーバー作成・GATT登録
-    server = BlessServer(name=DEVICE_NAME, loop=loop, on_write=on_write)
+    server = BlessServer(name=DEVICE_NAME, loop=loop)
+    server.write_request_func = on_write
     await server.add_gatt(gatt)
 
     # サーバー開始（アドバタイズも自動で開始）
