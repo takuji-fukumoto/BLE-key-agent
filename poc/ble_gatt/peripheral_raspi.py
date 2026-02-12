@@ -72,7 +72,7 @@ async def run(loop: asyncio.AbstractEventLoop) -> None:
                 ),
                 "Permissions": (
                     GATTAttributePermissions.readable
-                    | GATTAttributePermissions.writable
+                    | GATTAttributePermissions.writeable
                 ),
                 "Value": None,
             },
