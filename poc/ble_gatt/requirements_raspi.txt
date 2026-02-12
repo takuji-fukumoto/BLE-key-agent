@@ -1,0 +1,7 @@
+# Raspberry Pi (Peripheral) 用 requirements
+# システムパッケージ（aptでインストール）:
+#   sudo apt install -y python3-dbus python3-gi bluez
+#
+# python3-dbus と python3-gi はシステムパッケージとして提供されるため、
+# pipではなくaptでインストールしてください。
+# このファイルにはpip用の追加依存はありません。
