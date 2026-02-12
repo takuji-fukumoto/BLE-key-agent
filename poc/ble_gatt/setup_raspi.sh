@@ -19,21 +19,26 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
-# 1. 必要パッケージのインストール
+# 1. システムパッケージ（BlueZのみ）
 echo ""
-echo "[1/4] パッケージのインストール..."
+echo "[1/4] BlueZのインストール..."
 apt update
-apt install -y python3-dbus python3-gi bluez
+apt install -y bluez
 
-# 2. Bluetoothサービスの有効化
+# 2. Pythonパッケージ（bless）
 echo ""
-echo "[2/4] Bluetoothサービスの有効化..."
+echo "[2/4] Pythonパッケージのインストール..."
+pip install --break-system-packages bless>=0.3.0 || pip install bless>=0.3.0
+
+# 3. Bluetoothサービスの有効化
+echo ""
+echo "[3/4] Bluetoothサービスの有効化..."
 systemctl enable bluetooth
 systemctl start bluetooth
 
-# 3. Bluetoothアダプタの状態確認
+# 4. Bluetoothアダプタの状態確認
 echo ""
-echo "[3/4] Bluetoothアダプタの確認..."
+echo "[4/4] Bluetoothアダプタの確認..."
 if hciconfig hci0 > /dev/null 2>&1; then
     hciconfig hci0 up
     echo "  hci0: OK"
@@ -42,28 +47,6 @@ else
     echo "  警告: hci0 が見つかりません"
     echo "  Bluetoothハードウェアを確認してください"
 fi
-
-# 4. BlueZ設定の更新（BLE Peripheral用）
-echo ""
-echo "[4/4] BlueZ設定の更新..."
-MAIN_CONF="/etc/bluetooth/main.conf"
-if [ -f "$MAIN_CONF" ]; then
-    # バックアップ
-    cp "$MAIN_CONF" "${MAIN_CONF}.bak"
-fi
-
-# Experimental機能の有効化（GATTサーバーに必要な場合がある）
-if grep -q "^#.*Experimental" "$MAIN_CONF" 2>/dev/null; then
-    sed -i 's/^#.*Experimental.*/Experimental = true/' "$MAIN_CONF"
-elif ! grep -q "^Experimental" "$MAIN_CONF" 2>/dev/null; then
-    echo "" >> "$MAIN_CONF"
-    echo "[General]" >> "$MAIN_CONF"
-    echo "Experimental = true" >> "$MAIN_CONF"
-fi
-
-# サービス再起動
-systemctl restart bluetooth
-sleep 2
 
 echo ""
 echo "=========================================="

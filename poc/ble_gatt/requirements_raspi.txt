@@ -1,7 +1,6 @@
 # Raspberry Pi (Peripheral) 用 requirements
-# システムパッケージ（aptでインストール）:
-#   sudo apt install -y python3-dbus python3-gi bluez
-#
-# python3-dbus と python3-gi はシステムパッケージとして提供されるため、
-# pipではなくaptでインストールしてください。
-# このファイルにはpip用の追加依存はありません。
+# python3-dbus 等のシステムパッケージは不要
+
+# BLE GATTサーバーライブラリ（bleak の Peripheral版）
+# 内部で dbus-fast (純Python D-Bus) を使用するため pip だけで完結する
+bless>=0.3.0
