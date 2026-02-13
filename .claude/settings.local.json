@@ -6,7 +6,9 @@
       "WebFetch(domain:github.com)",
       "WebFetch(domain:pypi.org)",
       "WebFetch(domain:raw.githubusercontent.com)",
-      "Bash(xargs:*)"
+      "Bash(xargs:*)",
+      "Bash(git checkout:*)",
+      "Bash(gh auth status:*)"
     ]
   }
 }
