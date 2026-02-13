@@ -60,7 +60,9 @@ EnterPlanModeを使って実装計画を作成してください。
 
 計画は `plan/` フォルダ内にマークダウンファイルとして出力してください:
 
-- ファイルパス: `plan/<ブランチ名から feature/ を除いた部分>.md`（例: `plan/add-ble-protocol.md`）
+- ファイルパス: `plan/[YYYYMMDDHHMMSS]_[plan概要].md`（例: `plan/20260213143000_add-ble-protocol.md`）
+- タイムスタンプは作成時点の日時を使用してください
+- plan概要はブランチ名から `feature/` を除いた部分を使用してください
 - フォルダが存在しない場合は作成してください
 
 #### planファイルのフォーマット
