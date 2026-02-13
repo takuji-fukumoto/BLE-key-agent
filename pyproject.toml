@@ -1,0 +1,29 @@
+[project]
+name = "ble-key-agent"
+version = "0.1.0"
+description = "BLE key input transmission system: Mac to Raspberry Pi"
+requires-python = ">=3.10"
+
+[project.optional-dependencies]
+test = [
+    "pytest>=7.0",
+    "pytest-asyncio>=0.21",
+]
+mac = [
+    "bleak>=0.21.0",
+    "pynput>=1.7.6",
+    "flet",
+]
+raspi = [
+    "bless>=0.3.0",
+    "Pillow",
+    "spidev",
+    "gpiozero",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
