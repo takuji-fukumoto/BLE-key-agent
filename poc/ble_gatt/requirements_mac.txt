@@ -1,0 +1,5 @@
+# Mac (Central) 用 requirements
+# macOSではCoreBluetoothをネイティブ使用
+
+# BLE クライアントライブラリ（asyncioベース）
+bleak>=0.21.0

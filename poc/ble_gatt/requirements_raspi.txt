@@ -1,0 +1,6 @@
+# Raspberry Pi (Peripheral) 用 requirements
+# python3-dbus 等のシステムパッケージは不要
+
+# BLE GATTサーバーライブラリ（bleak の Peripheral版）
+# 内部で dbus-fast (純Python D-Bus) を使用するため pip だけで完結する
+bless>=0.3.0
