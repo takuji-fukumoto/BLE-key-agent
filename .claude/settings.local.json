@@ -8,7 +8,8 @@
       "WebFetch(domain:raw.githubusercontent.com)",
       "Bash(xargs:*)",
       "Bash(git checkout:*)",
-      "Bash(gh auth status:*)"
+      "Bash(gh auth status:*)",
+      "Bash(wc:*)"
     ]
   }
 }
