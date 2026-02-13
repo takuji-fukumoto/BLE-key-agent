@@ -1,0 +1,13 @@
+# Raspberry Pi側依存パッケージ
+
+# BLE GATT Server（bless内部でdbus-fastを使用、pipのみで完結）
+bless>=0.3.0
+
+# LCD表示・画像処理
+Pillow>=9.0.0
+
+# GPIO制御
+gpiozero>=2.0
+
+# SPI通信
+spidev>=3.5

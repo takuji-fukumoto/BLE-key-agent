@@ -140,10 +140,12 @@ cd BLE-key-agent
 source .venv/bin/activate
 
 # LCD 表示アプリの起動
-sudo python -m src.raspi_receiver.apps.lcd_display.main
+cd src
+sudo python -m raspi_receiver.apps.lcd_display.main
 ```
 
 > `sudo` は BLE アドバタイズと GPIO/SPI アクセスに必要。
+> **重要**: `src/` ディレクトリで実行すること（`common` モジュールの検索パスのため）
 
 起動すると `RasPi-KeyAgent` としてアドバタイズが開始され、LCD に接続待ちが表示される。
 
@@ -154,7 +156,8 @@ cd BLE-key-agent
 source .venv/bin/activate
 
 # Mac エージェントアプリの起動
-python -m src.mac_agent.main
+cd src
+python -m mac_agent.main
 ```
 
 GUI が起動したら:
@@ -167,7 +170,8 @@ Mac でのキー入力がリアルタイムに Pi の LCD に表示される。
 ### テストの実行
 
 ```bash
-pytest tests/
+cd src  # src/ ディレクトリで実行（モジュール検索パスのため）
+pytest ../tests/
 ```
 
 ## BLE 通信仕様（概要）
