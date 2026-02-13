@@ -309,19 +309,57 @@ class BleClient:
     def _on_disconnect(self, client: BleakClientType) -> None:
         """Bleak disconnection callback (runs in event loop).
 
+        Triggers automatic reconnection if a previous address is stored.
+
         Args:
             client: Disconnected BleakClient instance.
-
-        Note:
-            Reconnection logic will be implemented in Phase 3.
         """
         logger.warning("BLE connection lost")
         self._client = None
-        self._set_status(STATUS_DISCONNECTED)
 
-        # TODO Phase3: Start reconnection if we have a last address
-        # if self._last_address is not None:
-        #     loop = asyncio.get_event_loop()
-        #     self._reconnect_task = loop.create_task(
-        #         self._reconnect_loop()
-        #     )
+        # Start reconnection if we have a last address
+        if self._last_address is not None:
+            loop = asyncio.get_event_loop()
+            self._reconnect_task = loop.create_task(
+                self._reconnect_loop()
+            )
+        else:
+            self._set_status(STATUS_DISCONNECTED)
+
+    async def _reconnect_loop(self) -> None:
+        """Automatic reconnection with exponential backoff.
+
+        Implements exponential backoff: 1s → 2s → 4s → ... → max 60s.
+        Resets backoff on successful reconnection.
+
+        Continues indefinitely until connection succeeds or task is cancelled.
+        """
+        if self._last_address is None:
+            logger.warning("No last address for reconnection")
+            return
+
+        self._set_status(STATUS_RECONNECTING)
+
+        delay = 1.0  # Initial delay
+        max_delay = 60.0
+        backoff_multiplier = 2.0
+
+        attempt = 0
+        while True:
+            attempt += 1
+            logger.info(
+                "Reconnection attempt %d in %.1fs to %s",
+                attempt,
+                delay,
+                self._last_address
+            )
+
+            await asyncio.sleep(delay)
+
+            success = await self.connect(self._last_address)
+            if success:
+                logger.info("Reconnection successful after %d attempts", attempt)
+                return  # Exit loop
+
+            # Exponential backoff
+            delay = min(delay * backoff_multiplier, max_delay)
