@@ -15,10 +15,10 @@ mac = [
     "flet",
 ]
 raspi = [
+    # bless のみ pip で管理（apt リポジトリにない）
+    # gpiozero, Pillow, spidev, numpy は apt で入れること（lgpio 連携のため）
+    # 詳細: scripts/setup_raspi.sh 参照
     "bless>=0.3.0",
-    "Pillow",
-    "spidev",
-    "gpiozero",
 ]
 
 [tool.setuptools.packages.find]
