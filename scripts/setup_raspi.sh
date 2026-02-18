@@ -79,7 +79,7 @@ if python3 -c "import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)" 2>
     PIP_FLAGS="--break-system-packages"
 fi
 
-pip3 install $PIP_FLAGS bless>=0.3.0 Pillow>=9.0.0 gpiozero>=2.0 spidev>=3.5
+pip3 install $PIP_FLAGS bless>=0.3.0 Pillow>=9.0.0 numpy gpiozero>=2.0 spidev>=3.5
 
 echo "  完了"
 
@@ -109,6 +109,9 @@ python3 -c "import bless; print(bless.__version__)" 2>/dev/null || echo "イン�
 
 echo -n "  Pillow: "
 python3 -c "from PIL import Image; print(Image.__version__)" 2>/dev/null || echo "インポートエラー"
+
+echo -n "  numpy: "
+python3 -c "import numpy; print(numpy.__version__)" 2>/dev/null || echo "インポートエラー"
 
 echo -n "  spidev: "
 python3 -c "import spidev; print('OK')" 2>/dev/null || echo "インポートエラー"
