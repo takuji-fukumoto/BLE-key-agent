@@ -37,6 +37,9 @@ apt install -y \
     bluez \
     python3-pip \
     python3-dev \
+    python3-lgpio \
+    python3-rpi-lgpio \
+    python3-gpiozero \
     libopenjp2-7 \
     libtiff6 \
     libatlas3-base \
