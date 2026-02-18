@@ -17,7 +17,7 @@ mac = [
 raspi = [
     "bless>=0.3.0",
     "Pillow",
-    "numpy",
+    "numpy>=1.24,<2.0",
     "spidev",
     "gpiozero",
 ]

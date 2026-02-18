@@ -37,8 +37,10 @@ apt install -y \
     bluez \
     python3-pip \
     python3-dev \
+    python3-numpy \
     libopenjp2-7 \
     libtiff6 \
+    libatlas3-base \
     libfreetype6-dev
 
 echo "  完了"
@@ -79,7 +81,8 @@ if python3 -c "import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)" 2>
     PIP_FLAGS="--break-system-packages"
 fi
 
-pip3 install $PIP_FLAGS bless>=0.3.0 Pillow>=9.0.0 numpy gpiozero>=2.0 spidev>=3.5
+# numpy は apt の python3-numpy を使用（pip ビルドは ARM で失敗しやすい）
+pip3 install $PIP_FLAGS "bless>=0.3.0" "Pillow>=9.0.0" "gpiozero>=2.0" "spidev>=3.5"
 
 echo "  完了"
 
