@@ -37,7 +37,6 @@ apt install -y \
     bluez \
     python3-pip \
     python3-dev \
-    python3-numpy \
     libopenjp2-7 \
     libtiff6 \
     libatlas3-base \
@@ -112,9 +111,6 @@ python3 -c "import bless; print(bless.__version__)" 2>/dev/null || echo "イン�
 
 echo -n "  Pillow: "
 python3 -c "from PIL import Image; print(Image.__version__)" 2>/dev/null || echo "インポートエラー"
-
-echo -n "  numpy: "
-python3 -c "import numpy; print(numpy.__version__)" 2>/dev/null || echo "インポートエラー"
 
 echo -n "  spidev: "
 python3 -c "import spidev; print('OK')" 2>/dev/null || echo "インポートエラー"

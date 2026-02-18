@@ -20,6 +20,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional
 
+import types
+
 from PIL import Image, ImageDraw, ImageFont
 
 from raspi_receiver.apps.lcd_display.config import (
@@ -96,6 +98,10 @@ class LCDDisplay:
         Adds the example driver directory to sys.path, imports ST7789,
         and runs hardware initialization sequence.
 
+        If numpy is not available, the ST7789 driver's ShowImage method
+        is replaced with a pure-Python RGB565 conversion to avoid the
+        numpy dependency (pip install numpy often fails on ARM/Raspberry Pi).
+
         Raises:
             RuntimeError: If hardware initialization fails.
         """
@@ -107,9 +113,30 @@ class LCDDisplay:
         if driver_dir not in sys.path:
             sys.path.insert(0, driver_dir)
 
+        # Make numpy optional for the Waveshare LCD driver.
+        # config.py does `import numpy as np` at top level, which fails
+        # if numpy is not installed. We inject a stub to let the import
+        # succeed, then replace ShowImage with a pure-Python version.
+        _has_numpy = "numpy" in sys.modules
+        if not _has_numpy:
+            try:
+                import numpy  # noqa: F401
+                _has_numpy = True
+            except ImportError:
+                _stub = types.ModuleType("numpy")
+                _stub.uint8 = None  # type: ignore[attr-defined]
+                sys.modules["numpy"] = _stub
+                logger.info("numpy not available, using pure-Python RGB565")
+
         import ST7789
 
         self._disp = ST7789.ST7789()
+
+        if not _has_numpy:
+            self._disp.ShowImage = types.MethodType(
+                _show_image_rgb565, self._disp
+            )
+
         self._disp.Init()
         self._disp.clear()
         self._disp.bl_DutyCycle(self._backlight)
@@ -368,3 +395,40 @@ class LCDDisplay:
         elif key_type == "m":
             return key_value.capitalize()
         return key_value
+
+
+def _show_image_rgb565(disp: Any, image: Image.Image) -> None:
+    """Pure-Python ShowImage replacement (no numpy required).
+
+    Converts an RGB888 PIL Image to RGB565 and sends it to the
+    ST7789 LCD via SPI. This is a drop-in replacement for
+    ST7789.ShowImage() that avoids the numpy dependency.
+
+    Args:
+        disp: ST7789 driver instance (bound as self via MethodType).
+        image: PIL Image in RGB mode, must match display dimensions.
+    """
+    imwidth, imheight = image.size
+    if imwidth != disp.width or imheight != disp.height:
+        raise ValueError(
+            f"Image must be {disp.width}x{disp.height}, "
+            f"got {imwidth}x{imheight}"
+        )
+
+    if image.mode != "RGB":
+        image = image.convert("RGB")
+
+    pixels = image.tobytes()  # Flat RGB888 bytes
+    pix = bytearray(disp.width * disp.height * 2)  # RGB565 output
+
+    for i in range(0, len(pixels), 3):
+        r, g, b = pixels[i], pixels[i + 1], pixels[i + 2]
+        j = (i // 3) * 2
+        pix[j] = (r & 0xF8) | (g >> 5)
+        pix[j + 1] = ((g << 3) & 0xE0) | (b >> 3)
+
+    pix_list = list(pix)
+    disp.SetWindows(0, 0, disp.width, disp.height)
+    disp.digital_write(disp.GPIO_DC_PIN, True)
+    for i in range(0, len(pix_list), 4096):
+        disp.spi_writebyte(pix_list[i:i + 4096])
