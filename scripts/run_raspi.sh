@@ -5,18 +5,13 @@
 # BLE で Mac からのキー入力を受信し、LCD に表示する
 #
 # 使用方法:
-#   sudo ./scripts/run_raspi.sh
+#   ./scripts/run_raspi.sh
 #
-# ※ BLE アドバタイズと GPIO/SPI アクセスのため sudo が必要
+# ※ 事前に setup_raspi.sh で権限設定済みであること
+#   （BLE ケーパビリティ + bluetooth/spi/gpio グループ）
 #
 
 set -e
-
-# root 権限チェック
-if [ "$EUID" -ne 0 ]; then
-    echo "sudo で実行してください: sudo ./scripts/run_raspi.sh"
-    exit 1
-fi
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"

@@ -35,7 +35,7 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 #    Waveshare wiki 準拠: gpiozero, PIL, numpy, spidev は apt で入れる。
 #    pip で入れると apt の lgpio との連携が壊れるため。
 echo ""
-echo "[1/5] システムパッケージのインストール..."
+echo "[1/6] システムパッケージのインストール..."
 apt update
 apt install -y \
     bluez \
@@ -55,7 +55,7 @@ echo "  完了"
 
 # 2. SPI 有効化（LCD HAT 用）
 echo ""
-echo "[2/5] SPI インターフェースの有効化..."
+echo "[2/6] SPI インターフェースの有効化..."
 if raspi-config nonint get_spi | grep -q "1"; then
     raspi-config nonint do_spi 0
     echo "  SPI を有効化しました（再起動後に反映）"
@@ -81,7 +81,7 @@ fi
 
 # 3. Python パッケージ (pip) — apt にないものだけ
 echo ""
-echo "[3/5] BLE ライブラリのインストール (pip)..."
+echo "[3/6] BLE ライブラリのインストール (pip)..."
 
 # --break-system-packages フラグ（Debian 12+ / Raspberry Pi OS Bookworm 以降で必要）
 PIP_FLAGS=""
@@ -96,7 +96,7 @@ echo "  完了"
 
 # 4. Bluetooth サービス
 echo ""
-echo "[4/5] Bluetooth サービスの有効化..."
+echo "[4/6] Bluetooth サービスの有効化..."
 systemctl enable bluetooth
 systemctl start bluetooth
 
@@ -108,9 +108,36 @@ else
     echo "  Bluetooth ハードウェアを確認してください"
 fi
 
-# 5. 動作確認
+# 5. sudo なし実行のための権限設定
 echo ""
-echo "[5/5] 環境確認..."
+echo "[5/6] ユーザー権限の設定（sudo なし実行用）..."
+
+# SUDO_USER: sudo 経由で実行した場合の元ユーザー
+ACTUAL_USER="${SUDO_USER:-$USER}"
+
+if [ "$ACTUAL_USER" != "root" ]; then
+    # BLE / GPIO / SPI グループに追加
+    usermod -aG bluetooth "$ACTUAL_USER" 2>/dev/null && echo "  bluetooth グループに追加" || true
+    usermod -aG spi "$ACTUAL_USER" 2>/dev/null && echo "  spi グループに追加" || true
+    usermod -aG gpio "$ACTUAL_USER" 2>/dev/null && echo "  gpio グループに追加" || true
+
+    # Python に BLE ケーパビリティを付与（sudo なしで BLE 操作可能にする）
+    PYTHON_PATH="$(readlink -f "$(which python3)")"
+    if [ -n "$PYTHON_PATH" ]; then
+        setcap cap_net_raw,cap_net_admin+eip "$PYTHON_PATH"
+        echo "  BLE ケーパビリティを付与: $PYTHON_PATH"
+    else
+        echo "  警告: python3 のパスが取得できません"
+    fi
+
+    echo "  完了（反映には再ログインが必要です）"
+else
+    echo "  スキップ（root ユーザーのため）"
+fi
+
+# 6. 動作確認
+echo ""
+echo "[6/6] 環境確認..."
 
 echo -n "  Python: "
 python3 --version
@@ -147,15 +174,16 @@ echo ""
 echo "=========================================="
 echo "セットアップ完了"
 echo ""
-echo "※ SPI/GPIO 設定を変更した場合は再起動してください:"
+echo "※ SPI/GPIO/権限 設定を反映するため再起動してください:"
 echo "  sudo reboot"
 echo ""
-echo "LCD 表示アプリの起動:"
+echo "LCD 表示アプリの起動（sudo 不要）:"
 echo "  cd $PROJECT_ROOT"
-echo "  sudo ./scripts/run_raspi.sh"
+echo "  ./scripts/run_raspi.sh"
 echo ""
 echo "トラブルシューティング:"
 echo "  hciconfig              # Bluetooth アダプタ確認"
 echo "  ls /dev/spidev*        # SPI デバイス確認"
 echo "  journalctl -u bluetooth -f  # Bluetooth ログ"
+echo "  groups                 # グループ確認"
 echo "=========================================="
