@@ -210,7 +210,7 @@ echo -n "  Python: "
 "$PYTHON" --version
 
 echo -n "  bless: "
-"$PYTHON" -c "import bless; print(bless.__version__)" 2>/dev/null || echo "インポートエラー"
+"$PYTHON" -c "import bless; print(getattr(bless, '__version__', 'OK'))" 2>/dev/null || echo "インポートエラー"
 
 echo -n "  Pillow: "
 "$PYTHON" -c "from PIL import Image; print(Image.__version__)" 2>/dev/null || echo "インポートエラー"
