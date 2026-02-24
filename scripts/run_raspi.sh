@@ -18,10 +18,22 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 cd "$PROJECT_ROOT"
 
+# venv が存在すれば自動で有効化
+VENV_DIR="$PROJECT_ROOT/.venv"
+if [ -d "$VENV_DIR" ] && [ -f "$VENV_DIR/bin/python" ]; then
+    source "$VENV_DIR/bin/activate"
+    PYTHON="$VENV_DIR/bin/python"
+    VENV_LABEL="venv ($VENV_DIR)"
+else
+    PYTHON="python3"
+    VENV_LABEL="system"
+fi
+
 echo "=========================================="
 echo "BLE Key Agent - Raspberry Pi LCD App"
 echo "=========================================="
 echo ""
+echo "Python: $PYTHON ($VENV_LABEL)"
 echo "BLE アドバタイズを開始します..."
 echo "デバイス名: RasPi-KeyAgent"
 echo ""
@@ -29,4 +41,4 @@ echo "終了するには Ctrl+C を押してください"
 echo "=========================================="
 echo ""
 
-PYTHONPATH=src python3 -m raspi_receiver.apps.lcd_display.main
+PYTHONPATH=src "$PYTHON" -m raspi_receiver.apps.lcd_display.main
