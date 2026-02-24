@@ -126,8 +126,11 @@ echo "[3/6] BLE ライブラリのインストール (pip)..."
 if $USE_VENV; then
     # venv 作成（--system-site-packages で apt の Python パッケージを引き継ぐ）
     # gpiozero, lgpio, spidev, PIL 等は apt 版を使う必要があるため
+    # /usr/bin/python3 を明示的に使用（/usr/local/bin に別バージョンがあると
+    # apt パッケージと Python バージョンが不一致になるため）
     ACTUAL_USER="${SUDO_USER:-$USER}"
-    python3 -m venv --system-site-packages "$VENV_DIR"
+    SYSTEM_PYTHON="/usr/bin/python3"
+    "$SYSTEM_PYTHON" -m venv --system-site-packages "$VENV_DIR"
     "$VENV_DIR/bin/pip" install --upgrade pip
     "$VENV_DIR/bin/pip" install "bless>=0.3.0"
 
