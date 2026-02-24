@@ -60,6 +60,13 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
+# IPv6 でリポジトリに接続できない環境向けに IPv4 を強制
+APT_CONF="/etc/apt/apt.conf.d/99force-ipv4"
+if [ ! -f "$APT_CONF" ]; then
+    echo 'Acquire::ForceIPv4 "true";' > "$APT_CONF"
+    echo "  IPv4 強制設定を追加: $APT_CONF"
+fi
+
 # 1. システムパッケージ + Python パッケージ (apt)
 #    Waveshare wiki 準拠: gpiozero, PIL, numpy, spidev は apt で入れる。
 #    pip で入れると apt の lgpio との連携が壊れるため。
