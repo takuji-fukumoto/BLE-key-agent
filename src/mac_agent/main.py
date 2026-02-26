@@ -45,9 +45,13 @@ class MacAgent:
     def __init__(self, device_name: str | None = None) -> None:
         self._device_name = device_name
         self._key_queue: asyncio.Queue[KeyEvent | None] = asyncio.Queue()
-        self._ble_client = BleClient()
+        self._ble_client = BleClient(on_status_change=self._on_ble_status_change)
         self._key_monitor = KeyMonitor(self._key_queue)
         self._shutdown_event = asyncio.Event()
+
+    def _on_ble_status_change(self, status: str) -> None:
+        """Handle BLE connection status changes."""
+        logger.info("BLE status: %s", status)
 
     async def run(self) -> None:
         """Start the agent and run until shutdown."""
