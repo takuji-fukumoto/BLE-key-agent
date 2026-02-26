@@ -23,6 +23,7 @@ import asyncio
 import logging
 import signal
 import sys
+import time
 
 from mac_agent.ble_client import BleClient, STATUS_CONNECTED
 from mac_agent.key_monitor import KeyMonitor
@@ -34,6 +35,9 @@ logging.basicConfig(
     datefmt="%H:%M:%S",
 )
 logger = logging.getLogger(__name__)
+
+# Heartbeat interval in seconds. Pi-side timeout (10s) should be >= 3x this.
+HEARTBEAT_INTERVAL_SEC: float = 3.0
 
 
 class MacAgent:
@@ -48,6 +52,7 @@ class MacAgent:
         self._ble_client = BleClient(on_status_change=self._on_ble_status_change)
         self._key_monitor = KeyMonitor(self._key_queue)
         self._shutdown_event = asyncio.Event()
+        self._last_send_time: float = 0.0
 
     def _on_ble_status_change(self, status: str) -> None:
         """Handle BLE connection status changes."""
@@ -73,8 +78,11 @@ class MacAgent:
             await self._key_monitor.start()
             logger.info("Key monitoring started (press Esc to stop)")
 
-            # Main loop: forward key events to BLE
-            await self._forward_loop()
+            # Run key forwarding and heartbeat in parallel
+            await asyncio.gather(
+                self._forward_loop(),
+                self._heartbeat_loop(),
+            )
 
         finally:
             await self._cleanup()
@@ -142,14 +150,35 @@ class MacAgent:
             if event is None:
                 # Stop signal from KeyMonitor (Esc pressed)
                 logger.info("Esc pressed, stopping...")
+                self._shutdown_event.set()
                 break
 
             # Send via BLE
             if self._ble_client.status == STATUS_CONNECTED:
                 await self._ble_client.send_key(event)
+                self._last_send_time = time.monotonic()
                 # Log key press only
                 if event.press:
                     logger.debug(f"Sent: {event}")
+
+    async def _heartbeat_loop(self) -> None:
+        """Send periodic heartbeat while connected.
+
+        Skips sending if a key event was sent recently (within the
+        heartbeat interval) to avoid unnecessary BLE traffic.
+        """
+        while not self._shutdown_event.is_set():
+            await asyncio.sleep(HEARTBEAT_INTERVAL_SEC)
+            if self._shutdown_event.is_set():
+                break
+            # Skip if we sent data recently
+            elapsed = time.monotonic() - self._last_send_time
+            if elapsed < HEARTBEAT_INTERVAL_SEC:
+                continue
+            if self._ble_client.status == STATUS_CONNECTED:
+                await self._ble_client.send_key(KeyEvent.heartbeat())
+                self._last_send_time = time.monotonic()
+                logger.debug("Heartbeat sent")
 
     def _signal_shutdown(self) -> None:
         """Handle shutdown signal."""

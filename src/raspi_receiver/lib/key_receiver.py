@@ -4,21 +4,31 @@ Wraps GATTServer to provide application-friendly key event handling.
 Applications register callbacks for key press/release and connection events,
 then call start() to begin receiving.
 
+Includes heartbeat-based disconnect detection: if no data (key events or
+heartbeats) is received within DISCONNECT_TIMEOUT_SEC, the client is
+considered disconnected and on_disconnect is fired.
+
 See docs/spec-raspi-receiver.md section 3.3 for the interface specification.
 """
 
 from __future__ import annotations
 
+import asyncio
 import logging
+import time
 from typing import Callable, Optional
 
-from common.protocol import KeyEvent
+from common.protocol import KeyEvent, KeyType
 from common.uuids import DEVICE_NAME
 
 from raspi_receiver.lib.gatt_server import GATTServer
 from raspi_receiver.lib.types import ConnectionEvent
 
 logger = logging.getLogger(__name__)
+
+# Disconnect if no data received for this many seconds.
+# Should be >= 3x the Mac-side heartbeat interval (3s) to absorb jitter.
+DISCONNECT_TIMEOUT_SEC: float = 10.0
 
 
 class KeyReceiver:
@@ -42,6 +52,9 @@ class KeyReceiver:
             on_write=self._handle_write,
         )
         self._connected = False
+        self._last_receive_time: float = 0.0
+        self._timeout_task: Optional[asyncio.Task[None]] = None
+        self._loop: Optional[asyncio.AbstractEventLoop] = None
 
         # Application callbacks (set by user)
         self.on_key_press: Optional[Callable[[KeyEvent], None]] = None
@@ -55,7 +68,9 @@ class KeyReceiver:
         Raises:
             RuntimeError: If the receiver is already running.
         """
+        self._loop = asyncio.get_running_loop()
         await self._server.start()
+        self._timeout_task = asyncio.create_task(self._timeout_monitor())
         logger.info("KeyReceiver started, waiting for connections...")
 
     async def stop(self) -> None:
@@ -63,6 +78,14 @@ class KeyReceiver:
 
         Safe to call even if the receiver is not running.
         """
+        if self._timeout_task is not None:
+            self._timeout_task.cancel()
+            try:
+                await self._timeout_task
+            except asyncio.CancelledError:
+                pass
+            self._timeout_task = None
+
         await self._server.stop()
         if self._connected:
             self._connected = False
@@ -80,8 +103,12 @@ class KeyReceiver:
 
         Deserializes the data using common.protocol.KeyEvent and
         dispatches to the appropriate callback (press or release).
+        Heartbeat events update the receive timestamp but are not
+        propagated to application callbacks.
         Invalid data is logged and skipped per spec.
         """
+        self._last_receive_time = time.monotonic()
+
         if not self._connected:
             self._connected = True
             logger.info("Client connected (first write received)")
@@ -95,6 +122,11 @@ class KeyReceiver:
             event = KeyEvent.deserialize(data)
         except ValueError:
             logger.warning("Failed to deserialize key event, skipping: %r", data)
+            return
+
+        # Heartbeat: update timestamp only, do not propagate to app
+        if event.key_type == KeyType.HEARTBEAT:
+            logger.debug("Heartbeat received")
             return
 
         logger.debug(
@@ -116,3 +148,29 @@ class KeyReceiver:
                     self.on_key_release(event)
                 except Exception:
                     logger.exception("Error in on_key_release callback")
+
+    async def _timeout_monitor(self) -> None:
+        """Monitor for receive timeout and fire on_disconnect.
+
+        Checks every second whether the time since the last received
+        data exceeds DISCONNECT_TIMEOUT_SEC. If so, marks the client
+        as disconnected and invokes the on_disconnect callback.
+        """
+        try:
+            while True:
+                await asyncio.sleep(1.0)
+                if not self._connected:
+                    continue
+                elapsed = time.monotonic() - self._last_receive_time
+                if elapsed > DISCONNECT_TIMEOUT_SEC:
+                    self._connected = False
+                    logger.info(
+                        "Client disconnected (timeout: %.1fs)", elapsed
+                    )
+                    if self.on_disconnect is not None:
+                        try:
+                            self.on_disconnect(ConnectionEvent(connected=False))
+                        except Exception:
+                            logger.exception("Error in on_disconnect callback")
+        except asyncio.CancelledError:
+            return
