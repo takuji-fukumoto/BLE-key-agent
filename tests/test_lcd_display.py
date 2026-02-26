@@ -10,6 +10,7 @@ import asyncio
 from unittest.mock import MagicMock, patch
 
 import pytest
+from PIL import Image, ImageDraw, ImageFont
 
 from common.protocol import KeyType, Modifiers
 from raspi_receiver.apps.lcd_display.config import EVENT_QUEUE_MAX_SIZE
@@ -550,3 +551,187 @@ class TestEventQueueBackpressure:
         )
         app._enqueue(event)
         loop.call_soon_threadsafe.assert_not_called()
+
+
+# --- TestShowImageRgb565 ---
+
+
+class TestShowImageRgb565:
+    """Tests for Fix 1: optimized _show_image_rgb565 with struct.pack_into."""
+
+    def test_rgb565_conversion_correctness(self) -> None:
+        """Test known RGB888 values produce correct RGB565 output."""
+        from raspi_receiver.apps.lcd_display.display import _show_image_rgb565
+
+        mock_disp = MagicMock()
+        mock_disp.width = 2
+        mock_disp.height = 1
+
+        # Create 2x1 image: red pixel + blue pixel
+        img = Image.new("RGB", (2, 1))
+        img.putpixel((0, 0), (255, 0, 0))  # Red
+        img.putpixel((1, 0), (0, 0, 255))  # Blue
+
+        buf = bytearray(2 * 1 * 2)
+        _show_image_rgb565(mock_disp, img, buf)
+
+        import struct
+
+        # Red: R=0xF8, G=0x00, B=0x00 → ((0xF8)<<8)|((0x00)<<3)|(0x00>>3) = 0xF800
+        pixel0 = struct.unpack_from(">H", buf, 0)[0]
+        assert pixel0 == 0xF800, f"Red pixel: expected 0xF800, got 0x{pixel0:04X}"
+
+        # Blue: R=0x00, G=0x00, B=0xFF → ((0x00)<<8)|((0x00)<<3)|(0xFF>>3) = 0x001F
+        pixel1 = struct.unpack_from(">H", buf, 2)[0]
+        assert pixel1 == 0x001F, f"Blue pixel: expected 0x001F, got 0x{pixel1:04X}"
+
+    def test_spi_receives_bytearray_not_list(self) -> None:
+        """Test SPI writebyte receives bytearray slices, not list."""
+        from raspi_receiver.apps.lcd_display.display import _show_image_rgb565
+
+        mock_disp = MagicMock()
+        mock_disp.width = 2
+        mock_disp.height = 1
+
+        img = Image.new("RGB", (2, 1), (128, 128, 128))
+        buf = bytearray(2 * 1 * 2)
+        _show_image_rgb565(mock_disp, img, buf)
+
+        for call in mock_disp.spi_writebyte.call_args_list:
+            arg = call[0][0]
+            assert isinstance(arg, bytearray), (
+                f"Expected bytearray, got {type(arg).__name__}"
+            )
+
+    def test_reuses_provided_buffer(self) -> None:
+        """Test that the provided buffer is written to in-place."""
+        from raspi_receiver.apps.lcd_display.display import _show_image_rgb565
+
+        mock_disp = MagicMock()
+        mock_disp.width = 1
+        mock_disp.height = 1
+
+        img = Image.new("RGB", (1, 1), (255, 255, 255))
+        buf = bytearray(2)
+        _show_image_rgb565(mock_disp, img, buf)
+
+        # White: should produce non-zero bytes in our buffer
+        assert buf != bytearray(2), "Buffer should have been written to"
+
+    def test_size_mismatch_raises(self) -> None:
+        """Test ValueError on image/display size mismatch."""
+        from raspi_receiver.apps.lcd_display.display import _show_image_rgb565
+
+        mock_disp = MagicMock()
+        mock_disp.width = 240
+        mock_disp.height = 240
+
+        img = Image.new("RGB", (100, 100))
+        with pytest.raises(ValueError, match="240x240"):
+            _show_image_rgb565(mock_disp, img)
+
+
+# --- TestRenderOptimization ---
+
+
+class TestRenderOptimization:
+    """Tests for Fix 2: render() uses transpose() and numpy-aware dispatch."""
+
+    def test_render_uses_transpose_not_rotate(self) -> None:
+        """Test render() calls transpose(ROTATE_270) instead of rotate()."""
+        display = LCDDisplay()
+        mock_image = MagicMock(spec=Image.Image)
+        mock_draw = MagicMock(spec=ImageDraw.ImageDraw)
+        mock_disp = MagicMock()
+        mock_transposed = MagicMock(spec=Image.Image)
+        mock_image.transpose.return_value = mock_transposed
+
+        display._image = mock_image
+        display._draw = mock_draw
+        display._disp = mock_disp
+        display._fonts = {
+            "title": MagicMock(),
+            "status": MagicMock(),
+            "key_large": MagicMock(),
+            "modifier": MagicMock(),
+            "buffer": MagicMock(),
+        }
+        display._has_numpy = True
+        display._state.mark_dirty()
+
+        display.render()
+
+        mock_image.transpose.assert_called_once_with(
+            Image.Transpose.ROTATE_270
+        )
+        mock_image.rotate.assert_not_called()
+
+    def test_render_calls_show_image_with_numpy(self) -> None:
+        """Test render() uses disp.ShowImage when numpy is available."""
+        display = LCDDisplay()
+        mock_image = MagicMock(spec=Image.Image)
+        mock_draw = MagicMock(spec=ImageDraw.ImageDraw)
+        mock_disp = MagicMock()
+        mock_transposed = MagicMock(spec=Image.Image)
+        mock_image.transpose.return_value = mock_transposed
+
+        display._image = mock_image
+        display._draw = mock_draw
+        display._disp = mock_disp
+        display._fonts = {
+            "title": MagicMock(),
+            "status": MagicMock(),
+            "key_large": MagicMock(),
+            "modifier": MagicMock(),
+            "buffer": MagicMock(),
+        }
+        display._has_numpy = True
+        display._state.mark_dirty()
+
+        display.render()
+
+        mock_disp.ShowImage.assert_called_once_with(mock_transposed)
+
+
+# --- TestEnqueueExceptionSafety ---
+
+
+class TestEnqueueExceptionSafety:
+    """Tests for Fix 3: _enqueue catches RuntimeError from closed loop."""
+
+    @pytest.fixture
+    def app(self) -> LCDApp:
+        with patch(
+            "raspi_receiver.apps.lcd_display.main.KeyReceiver"
+        ), patch("raspi_receiver.apps.lcd_display.main.LCDDisplay") as mock_display_cls:
+            mock_display = MagicMock()
+            mock_display_cls.return_value = mock_display
+            app = LCDApp()
+            yield app
+
+    def test_enqueue_swallows_runtime_error(self, app: LCDApp) -> None:
+        """Test _enqueue does not propagate RuntimeError from closed loop."""
+        loop = MagicMock()
+        loop.is_running.return_value = True
+        loop.call_soon_threadsafe.side_effect = RuntimeError("Event loop is closed")
+        app._loop = loop
+
+        event = DisplayKeyEvent(
+            key_value="a",
+            key_type=KeyType.CHAR.value,
+            press=True,
+            modifiers=None,
+        )
+        # Should not raise
+        app._enqueue(event)
+
+    def test_enqueue_connection_swallows_runtime_error(self, app: LCDApp) -> None:
+        """Test _enqueue swallows RuntimeError for connection events too."""
+        loop = MagicMock()
+        loop.is_running.return_value = True
+        loop.call_soon_threadsafe.side_effect = RuntimeError("Event loop is closed")
+        app._loop = loop
+
+        event = DisplayConnectionEvent(connected=True)
+        # Should not raise
+        app._enqueue(event)

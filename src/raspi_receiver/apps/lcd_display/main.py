@@ -148,14 +148,18 @@ class LCDApp:
         """
         if self._loop is None or not self._loop.is_running():
             return
-        if isinstance(event, DisplayConnectionEvent):
-            self._loop.call_soon_threadsafe(
-                self._event_queue.put_nowait, event
-            )
-        else:
-            self._loop.call_soon_threadsafe(
-                self._safe_enqueue_key, event
-            )
+        try:
+            if isinstance(event, DisplayConnectionEvent):
+                self._loop.call_soon_threadsafe(
+                    self._event_queue.put_nowait, event
+                )
+            else:
+                self._loop.call_soon_threadsafe(
+                    self._safe_enqueue_key, event
+                )
+        except RuntimeError:
+            # Loop closed between is_running() check and call_soon_threadsafe()
+            pass
 
     def _safe_enqueue_key(self, event: DisplayEvent) -> None:
         """Enqueue a key event, dropping silently if queue is full."""

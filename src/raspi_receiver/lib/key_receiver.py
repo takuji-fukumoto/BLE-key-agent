@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import threading
 import time
 from typing import Callable, Optional
 
@@ -52,6 +53,7 @@ class KeyReceiver:
             on_write=self._handle_write,
         )
         self._connected = False
+        self._conn_lock = threading.Lock()
         self._last_receive_time: float = 0.0
         self._timeout_task: Optional[asyncio.Task[None]] = None
         self._loop: Optional[asyncio.AbstractEventLoop] = None
@@ -87,8 +89,10 @@ class KeyReceiver:
             self._timeout_task = None
 
         await self._server.stop()
-        if self._connected:
+        with self._conn_lock:
+            was_connected = self._connected
             self._connected = False
+        if was_connected:
             logger.info("KeyReceiver stopped, client disconnected")
         else:
             logger.info("KeyReceiver stopped")
@@ -109,8 +113,12 @@ class KeyReceiver:
         """
         self._last_receive_time = time.monotonic()
 
-        if not self._connected:
-            self._connected = True
+        with self._conn_lock:
+            was_connected = self._connected
+            if not was_connected:
+                self._connected = True
+
+        if not was_connected:
             logger.info("Client connected (first write received)")
             if self.on_connect is not None:
                 try:
@@ -159,11 +167,16 @@ class KeyReceiver:
         try:
             while True:
                 await asyncio.sleep(1.0)
-                if not self._connected:
-                    continue
-                elapsed = time.monotonic() - self._last_receive_time
-                if elapsed > DISCONNECT_TIMEOUT_SEC:
-                    self._connected = False
+                with self._conn_lock:
+                    if not self._connected:
+                        continue
+                    elapsed = time.monotonic() - self._last_receive_time
+                    if elapsed > DISCONNECT_TIMEOUT_SEC:
+                        self._connected = False
+                        should_notify = True
+                    else:
+                        should_notify = False
+                if should_notify:
                     logger.info(
                         "Client disconnected (timeout: %.1fs)", elapsed
                     )

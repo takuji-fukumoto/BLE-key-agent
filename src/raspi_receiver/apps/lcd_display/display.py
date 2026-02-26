@@ -14,6 +14,7 @@ See docs/spec-raspi-receiver.md section 4 for the screen layout specification.
 from __future__ import annotations
 
 import logging
+import struct
 import sys
 import time
 from dataclasses import dataclass
@@ -86,6 +87,8 @@ class LCDDisplay:
         self._draw: Optional[ImageDraw.ImageDraw] = None
         self._fonts: dict[str, ImageFont.FreeTypeFont] = {}
         self.last_render_time: float = 0.0
+        self._has_numpy: bool = False
+        self._rgb565_buf: bytearray | None = None
 
     @property
     def state(self) -> ScreenState:
@@ -148,10 +151,9 @@ class LCDDisplay:
 
         self._disp = ST7789.ST7789()
 
+        self._has_numpy = _has_numpy
         if not _has_numpy:
-            self._disp.ShowImage = types.MethodType(
-                _show_image_rgb565, self._disp
-            )
+            self._rgb565_buf = bytearray(DISPLAY_WIDTH * DISPLAY_HEIGHT * 2)
 
         # Restore original PWMOutputDevice if we patched it
         if _patch_pwm:
@@ -287,8 +289,11 @@ class LCDDisplay:
         self._draw_buffer_region()
 
         # Rotate and send to display
-        rotated = self._image.rotate(DISPLAY_ROTATION)
-        self._disp.ShowImage(rotated)
+        rotated = self._image.transpose(Image.Transpose.ROTATE_270)
+        if self._has_numpy:
+            self._disp.ShowImage(rotated)
+        else:
+            _show_image_rgb565(self._disp, rotated, self._rgb565_buf)
 
         self._state.mark_clean()
         self.last_render_time = time.monotonic()
@@ -467,16 +472,20 @@ class _DigitalBacklightFallback:
         self._device.close()
 
 
-def _show_image_rgb565(disp: Any, image: Image.Image) -> None:
+def _show_image_rgb565(
+    disp: Any, image: Image.Image, buf: bytearray | None = None
+) -> None:
     """Pure-Python ShowImage replacement (no numpy required).
 
     Converts an RGB888 PIL Image to RGB565 and sends it to the
-    ST7789 LCD via SPI. This is a drop-in replacement for
-    ST7789.ShowImage() that avoids the numpy dependency.
+    ST7789 LCD via SPI. Uses struct.pack_into for in-place buffer
+    writes and passes bytearray slices directly to SPI (no list copy).
 
     Args:
-        disp: ST7789 driver instance (bound as self via MethodType).
+        disp: ST7789 driver instance.
         image: PIL Image in RGB mode, must match display dimensions.
+        buf: Optional pre-allocated bytearray for RGB565 output.
+             If None, a new buffer is created each call.
     """
     imwidth, imheight = image.size
     if imwidth != disp.width or imheight != disp.height:
@@ -488,17 +497,19 @@ def _show_image_rgb565(disp: Any, image: Image.Image) -> None:
     if image.mode != "RGB":
         image = image.convert("RGB")
 
-    pixels = image.tobytes()  # Flat RGB888 bytes
-    pix = bytearray(disp.width * disp.height * 2)  # RGB565 output
+    pixels = image.tobytes()
+    num_pixels = disp.width * disp.height
+    pix = buf if buf is not None else bytearray(num_pixels * 2)
 
-    for i in range(0, len(pixels), 3):
-        r, g, b = pixels[i], pixels[i + 1], pixels[i + 2]
-        j = (i // 3) * 2
-        pix[j] = (r & 0xF8) | (g >> 5)
-        pix[j + 1] = ((g << 3) & 0xE0) | (b >> 3)
+    for i in range(num_pixels):
+        off = i * 3
+        r, g, b = pixels[off], pixels[off + 1], pixels[off + 2]
+        struct.pack_into(
+            ">H", pix, i * 2,
+            ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3),
+        )
 
-    pix_list = list(pix)
     disp.SetWindows(0, 0, disp.width, disp.height)
     disp.digital_write(disp.GPIO_DC_PIN, True)
-    for i in range(0, len(pix_list), 4096):
-        disp.spi_writebyte(pix_list[i:i + 4096])
+    for i in range(0, len(pix), 4096):
+        disp.spi_writebyte(pix[i:i + 4096])

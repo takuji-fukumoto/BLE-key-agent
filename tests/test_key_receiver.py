@@ -4,6 +4,7 @@ Tests use a mocked GATTServer to verify KeyReceiver's deserialization
 and callback dispatch logic without BLE hardware.
 """
 
+import threading
 import time
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -424,3 +425,58 @@ class TestKeyReceiverTimeout:
 
         assert receiver._timeout_task is None
         assert timeout_task.cancelled()
+
+
+class TestKeyReceiverConnLock:
+    """Tests for Fix 4: _conn_lock thread safety on _connected flag."""
+
+    def _get_receiver_with_write_handler(self, mock_gatt_server):
+        mock_cls, _ = mock_gatt_server
+        receiver = KeyReceiver()
+        on_write = mock_cls.call_args.kwargs["on_write"]
+        return receiver, on_write
+
+    def test_conn_lock_exists(self, mock_gatt_server) -> None:
+        """Test that KeyReceiver has a _conn_lock attribute."""
+        receiver = KeyReceiver()
+        assert hasattr(receiver, "_conn_lock")
+        assert isinstance(receiver._conn_lock, type(threading.Lock()))
+
+    def test_concurrent_write_and_timeout_no_duplicate_callbacks(
+        self, mock_gatt_server
+    ) -> None:
+        """Test that on_connect does not fire twice under concurrent access."""
+        receiver, on_write = self._get_receiver_with_write_handler(mock_gatt_server)
+
+        connect_handler = MagicMock()
+        receiver.on_connect = connect_handler
+
+        # Simulate many concurrent writes from different threads
+        barrier = threading.Barrier(10)
+        event = KeyEvent(key_type=KeyType.CHAR, value="a", press=True)
+        data = event.serialize()
+
+        def write_from_thread() -> None:
+            barrier.wait()
+            on_write(data)
+
+        threads = [threading.Thread(target=write_from_thread) for _ in range(10)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        # on_connect should fire exactly once despite concurrent writes
+        connect_handler.assert_called_once()
+
+    def test_stop_with_conn_lock(self, mock_gatt_server) -> None:
+        """Test stop() properly resets _connected under lock."""
+        receiver, on_write = self._get_receiver_with_write_handler(mock_gatt_server)
+
+        event = KeyEvent(key_type=KeyType.CHAR, value="a", press=True)
+        on_write(event.serialize())
+        assert receiver.is_connected is True
+
+        import asyncio
+        asyncio.run(receiver.stop())
+        assert receiver.is_connected is False
