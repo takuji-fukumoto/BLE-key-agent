@@ -20,8 +20,6 @@ from raspi_receiver.lib import ConnectionEvent, KeyReceiver
 
 from raspi_receiver.apps.lcd_display.config import (
     BUTTON_POLL_INTERVAL_MS,
-    GPIO_KEY1,
-    GPIO_KEY2,
     RENDER_MIN_INTERVAL_MS,
 )
 from raspi_receiver.apps.lcd_display.display import LCDDisplay
@@ -267,8 +265,8 @@ class LCDApp:
                     continue
 
                 # Read button states (active low: 0 = pressed)
-                key1_pressed = disp.digital_read(GPIO_KEY1) == 0
-                key2_pressed = disp.digital_read(GPIO_KEY2) == 0
+                key1_pressed = disp.digital_read(disp.GPIO_KEY1_PIN) == 0
+                key2_pressed = disp.digital_read(disp.GPIO_KEY2_PIN) == 0
 
                 # KEY1: clear buffer (on press edge)
                 if key1_pressed and not key1_was_pressed:
