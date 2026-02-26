@@ -39,6 +39,12 @@ logger = logging.getLogger(__name__)
 # Heartbeat interval in seconds. Pi-side timeout (10s) should be >= 3x this.
 HEARTBEAT_INTERVAL_SEC: float = 3.0
 
+# Minimum interval between BLE writes to prevent overwhelming the Pi.
+MIN_SEND_INTERVAL_S: float = 0.005  # 5ms
+
+# Maximum pending key events on the Mac side (backpressure).
+MAC_KEY_QUEUE_MAX_SIZE: int = 256
+
 
 class MacAgent:
     """Mac agent application orchestrator.
@@ -48,7 +54,9 @@ class MacAgent:
 
     def __init__(self, device_name: str | None = None) -> None:
         self._device_name = device_name
-        self._key_queue: asyncio.Queue[KeyEvent | None] = asyncio.Queue()
+        self._key_queue: asyncio.Queue[KeyEvent | None] = asyncio.Queue(
+            maxsize=MAC_KEY_QUEUE_MAX_SIZE
+        )
         self._ble_client = BleClient(on_status_change=self._on_ble_status_change)
         self._key_monitor = KeyMonitor(self._key_queue)
         self._shutdown_event = asyncio.Event()
@@ -152,6 +160,12 @@ class MacAgent:
                 logger.info("Esc pressed, stopping...")
                 self._shutdown_event.set()
                 break
+
+            # Rate limiting: enforce minimum interval between sends
+            now = time.monotonic()
+            elapsed = now - self._last_send_time
+            if elapsed < MIN_SEND_INTERVAL_S:
+                await asyncio.sleep(MIN_SEND_INTERVAL_S - elapsed)
 
             # Send via BLE
             if self._ble_client.status == STATUS_CONNECTED:

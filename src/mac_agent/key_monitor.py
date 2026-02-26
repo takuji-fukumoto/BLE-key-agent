@@ -22,8 +22,9 @@ class KeyMonitor:
     """Monitors keyboard input and publishes events to asyncio queue.
 
     Uses pynput for global keyboard monitoring. Events are pushed to an
-    asyncio.Queue via run_coroutine_threadsafe() since pynput runs in a
-    separate thread.
+    asyncio.Queue via call_soon_threadsafe() since pynput runs in a
+    separate thread. If the queue is full, events are dropped to avoid
+    blocking the pynput thread.
 
     Based on poc/pynput/pynput_key_monitor.py with API adjustments per
     docs/spec-mac-agent.md section 4.1.
@@ -213,6 +214,20 @@ class KeyMonitor:
             timestamp=None,  # Timestamp omitted per spec (optional)
         )
 
+    def _safe_put(self, event: KeyEvent) -> None:
+        """Enqueue event, dropping if queue is full.
+
+        Runs on the asyncio event loop thread (scheduled via
+        call_soon_threadsafe). Uses put_nowait to avoid blocking.
+
+        Args:
+            event: KeyEvent to enqueue.
+        """
+        try:
+            self._queue.put_nowait(event)
+        except asyncio.QueueFull:
+            logger.warning("Key event queue full, dropping event")
+
     def _on_press(self, key) -> Optional[bool]:
         """Callback for pynput key press events (runs in pynput thread).
 
@@ -228,13 +243,10 @@ class KeyMonitor:
         # Create event
         event = self._create_event(key, is_press=True)
 
-        # Bridge to asyncio event loop
+        # Bridge to asyncio event loop (non-blocking)
         if self._loop and self._queue:
             try:
-                asyncio.run_coroutine_threadsafe(
-                    self._queue.put(event),
-                    self._loop
-                )
+                self._loop.call_soon_threadsafe(self._safe_put, event)
             except Exception:
                 logger.exception("Failed to queue key press event")
 
@@ -255,13 +267,10 @@ class KeyMonitor:
         # Create event
         event = self._create_event(key, is_press=False)
 
-        # Bridge to asyncio event loop
+        # Bridge to asyncio event loop (non-blocking)
         if self._loop and self._queue:
             try:
-                asyncio.run_coroutine_threadsafe(
-                    self._queue.put(event),
-                    self._loop
-                )
+                self._loop.call_soon_threadsafe(self._safe_put, event)
             except Exception:
                 logger.exception("Failed to queue key release event")
 

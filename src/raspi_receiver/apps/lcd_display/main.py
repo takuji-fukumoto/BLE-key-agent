@@ -20,6 +20,7 @@ from raspi_receiver.lib import ConnectionEvent, KeyReceiver
 
 from raspi_receiver.apps.lcd_display.config import (
     BUTTON_POLL_INTERVAL_MS,
+    EVENT_QUEUE_MAX_SIZE,
     RENDER_MIN_INTERVAL_MS,
 )
 from raspi_receiver.apps.lcd_display.display import LCDDisplay
@@ -60,9 +61,12 @@ class LCDApp:
     def __init__(self) -> None:
         self._receiver = KeyReceiver()
         self._display = LCDDisplay()
-        self._event_queue: asyncio.Queue[DisplayEvent] = asyncio.Queue()
+        self._event_queue: asyncio.Queue[DisplayEvent] = asyncio.Queue(
+            maxsize=EVENT_QUEUE_MAX_SIZE
+        )
         self._shutdown_event = asyncio.Event()
         self._loop: asyncio.AbstractEventLoop | None = None
+        self._rendering = False
 
     async def run(self) -> None:
         """Start the application and run until shutdown signal."""
@@ -137,11 +141,28 @@ class LCDApp:
         self._enqueue(DisplayConnectionEvent(connected=False))
 
     def _enqueue(self, event: DisplayEvent) -> None:
-        """Thread-safe enqueue of display events."""
-        if self._loop is not None and self._loop.is_running():
+        """Thread-safe enqueue of display events.
+
+        Connection events are always enqueued. Key events are silently
+        dropped when the queue is full to provide backpressure.
+        """
+        if self._loop is None or not self._loop.is_running():
+            return
+        if isinstance(event, DisplayConnectionEvent):
             self._loop.call_soon_threadsafe(
                 self._event_queue.put_nowait, event
             )
+        else:
+            self._loop.call_soon_threadsafe(
+                self._safe_enqueue_key, event
+            )
+
+    def _safe_enqueue_key(self, event: DisplayEvent) -> None:
+        """Enqueue a key event, dropping silently if queue is full."""
+        try:
+            self._event_queue.put_nowait(event)
+        except asyncio.QueueFull:
+            logger.debug("Event queue full, dropping key event")
 
     # --- Async tasks ---
 
@@ -180,8 +201,16 @@ class LCDApp:
                 if elapsed < min_interval:
                     await asyncio.sleep(min_interval - elapsed)
 
-                # Render
-                self._display.render()
+                # Render (offload blocking SPI I/O to thread pool)
+                if not self._rendering:
+                    self._rendering = True
+                    try:
+                        loop = asyncio.get_running_loop()
+                        await loop.run_in_executor(
+                            None, self._display.render
+                        )
+                    finally:
+                        self._rendering = False
 
             except asyncio.CancelledError:
                 break
@@ -252,6 +281,7 @@ class LCDApp:
         KEY2: Cycle backlight brightness
         """
         interval = BUTTON_POLL_INTERVAL_MS / 1000.0
+        loop = asyncio.get_running_loop()
 
         # Debounce state
         key1_was_pressed = False
@@ -265,13 +295,28 @@ class LCDApp:
                     continue
 
                 # Read button states (active low: 0 = pressed)
-                key1_pressed = disp.digital_read(disp.GPIO_KEY1_PIN) == 0
-                key2_pressed = disp.digital_read(disp.GPIO_KEY2_PIN) == 0
+                # Offload blocking GPIO reads to thread pool.
+                def _read_buttons() -> tuple[bool, bool]:
+                    return (
+                        disp.digital_read(disp.GPIO_KEY1_PIN) == 0,
+                        disp.digital_read(disp.GPIO_KEY2_PIN) == 0,
+                    )
+
+                key1_pressed, key2_pressed = await loop.run_in_executor(
+                    None, _read_buttons
+                )
 
                 # KEY1: clear buffer (on press edge)
                 if key1_pressed and not key1_was_pressed:
                     self._display.clear_buffer()
-                    self._display.render()
+                    if not self._rendering:
+                        self._rendering = True
+                        try:
+                            await loop.run_in_executor(
+                                None, self._display.render
+                            )
+                        finally:
+                            self._rendering = False
                     logger.debug("KEY1 pressed: buffer cleared")
 
                 # KEY2: cycle backlight (on press edge)

@@ -255,6 +255,78 @@ class TestAsyncioIntegration:
         assert monitor._running is False
 
 
+class TestSafePut:
+    """Tests for _safe_put() backpressure handling."""
+
+    @pytest.mark.asyncio
+    async def test_safe_put_enqueues_event(self) -> None:
+        """Test _safe_put adds event when queue has space."""
+        queue: asyncio.Queue[KeyEvent | None] = asyncio.Queue(maxsize=10)
+        monitor = KeyMonitor(queue)
+        event = KeyEvent(
+            key_type=KeyType.CHAR, value="a", press=True
+        )
+
+        monitor._safe_put(event)
+        assert queue.qsize() == 1
+
+    @pytest.mark.asyncio
+    async def test_safe_put_drops_when_full(self) -> None:
+        """Test _safe_put drops event without raising when queue is full."""
+        queue: asyncio.Queue[KeyEvent | None] = asyncio.Queue(maxsize=2)
+        monitor = KeyMonitor(queue)
+
+        # Fill the queue
+        event1 = KeyEvent(key_type=KeyType.CHAR, value="a", press=True)
+        event2 = KeyEvent(key_type=KeyType.CHAR, value="b", press=True)
+        queue.put_nowait(event1)
+        queue.put_nowait(event2)
+        assert queue.full()
+
+        # Should not raise
+        overflow = KeyEvent(key_type=KeyType.CHAR, value="c", press=True)
+        monitor._safe_put(overflow)
+        assert queue.qsize() == 2
+
+    @pytest.mark.asyncio
+    async def test_on_press_uses_call_soon_threadsafe(self) -> None:
+        """Test _on_press bridges via call_soon_threadsafe."""
+        queue: asyncio.Queue[KeyEvent | None] = asyncio.Queue(maxsize=10)
+        monitor = KeyMonitor(queue)
+        monitor._loop = MagicMock()
+        monitor._running = True
+
+        mock_key = MagicMock()
+        mock_key.char = "x"
+        type(mock_key).__name__ = "KeyCode"
+
+        with patch("mac_agent.key_monitor.keyboard.KeyCode", type(mock_key)):
+            monitor._on_press(mock_key)
+
+        monitor._loop.call_soon_threadsafe.assert_called_once()
+        args = monitor._loop.call_soon_threadsafe.call_args
+        assert args[0][0] == monitor._safe_put
+
+    @pytest.mark.asyncio
+    async def test_on_release_uses_call_soon_threadsafe(self) -> None:
+        """Test _on_release bridges via call_soon_threadsafe."""
+        queue: asyncio.Queue[KeyEvent | None] = asyncio.Queue(maxsize=10)
+        monitor = KeyMonitor(queue)
+        monitor._loop = MagicMock()
+        monitor._running = True
+
+        mock_key = MagicMock()
+        mock_key.char = "x"
+        type(mock_key).__name__ = "KeyCode"
+
+        with patch("mac_agent.key_monitor.keyboard.KeyCode", type(mock_key)):
+            monitor._on_release(mock_key)
+
+        monitor._loop.call_soon_threadsafe.assert_called_once()
+        args = monitor._loop.call_soon_threadsafe.call_args
+        assert args[0][0] == monitor._safe_put
+
+
 class TestAccessibilityCheck:
     """Tests for check_accessibility() static method."""
 

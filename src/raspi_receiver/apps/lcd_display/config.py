@@ -100,3 +100,4 @@ LAYOUT = Layout()
 RENDER_MIN_INTERVAL_MS: int = 50  # Minimum ms between LCD re-draws (20 FPS cap)
 INPUT_BUFFER_MAX_LENGTH: int = 200  # Max characters in input buffer
 BUTTON_POLL_INTERVAL_MS: int = 100  # Physical button polling interval
+EVENT_QUEUE_MAX_SIZE: int = 128  # Max pending display events (backpressure)
