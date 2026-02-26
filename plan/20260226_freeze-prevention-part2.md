@@ -92,6 +92,42 @@
 
 ---
 
+## 追加修正: メモリ蓄積対策（長時間運用フリーズ対応）
+
+10分以上の長時間運用でフリーズが継続したため、メモリ蓄積の根本対策を追加。
+
+### Fix 5: PIL 一時オブジェクトの明示的解放 + 定期GC
+
+**対象:** `display.py` `render()`, `_show_image_rgb565()`
+
+- `render()` で `del rotated` — transpose() が生成する172KB PIL Imageを即座に解放
+- `_show_image_rgb565()` で `del pixels` — tobytes() が生成する172KB bytesを即座に解放
+- 50フレームごとに `gc.collect()` を実行（render内）
+- `_render_count` フィールド追加
+
+### Fix 6: GATT characteristic のデータ蓄積防止
+
+**対象:** `gatt_server.py` `_handle_write()`
+
+- `characteristic.value = value` → `characteristic.value = b""` に変更
+- BLE writeのたびにcharacteristic内にデータが蓄積するのを防止
+
+### Fix 7: _render_loop の定期GC + バックログ監視
+
+**対象:** `main.py` `_render_loop()`
+
+- 60秒ごとに `gc.collect()` を実行（アイドル時含む）
+- キュー一括ドレイン数が maxsize/2 超のときに警告ログ出力
+
+### 実装状況
+
+- [x] Step 6: Fix 5 — render()/RGB565 の明示的メモリ解放 + 定期GC
+- [x] Step 7: Fix 6 — gatt_server characteristic クリア
+- [x] Step 8: Fix 7 — render_loop の定期GC + バックログ監視
+- [x] Step 9: テスト更新・実行（106 passed）
+
+---
+
 ## テスト
 
 ### test_lcd_display.py に追加
@@ -103,3 +139,7 @@
 ### test_key_receiver.py に追加
 
 - `TestKeyReceiverConnLock`: ロック存在確認、並行 write での on_connect 重複防止、stop() のロック使用
+
+### test_gatt_server.py 更新
+
+- `test_handle_write_calls_on_write`: characteristic.value がクリアされることを検証

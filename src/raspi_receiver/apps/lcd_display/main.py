@@ -9,6 +9,7 @@ Run with: python -m raspi_receiver.apps.lcd_display.main
 from __future__ import annotations
 
 import asyncio
+import gc
 import logging
 import signal
 import time
@@ -174,9 +175,13 @@ class LCDApp:
         """Process display events and render to LCD.
 
         Drains the event queue, updates screen state, and triggers
-        re-draws at a throttled rate.
+        re-draws at a throttled rate. When the queue is heavily
+        backlogged, events are drained without rendering each one
+        to prevent memory accumulation.
         """
         min_interval = RENDER_MIN_INTERVAL_MS / 1000.0
+        gc_interval = 60  # Seconds between forced GC
+        last_gc_time = time.monotonic()
 
         while not self._shutdown_event.is_set():
             try:
@@ -186,18 +191,30 @@ class LCDApp:
                         self._event_queue.get(), timeout=0.5
                     )
                 except asyncio.TimeoutError:
+                    # Periodic GC even when idle
+                    now = time.monotonic()
+                    if now - last_gc_time > gc_interval:
+                        gc.collect()
+                        last_gc_time = now
                     continue
 
                 # Process this event
                 self._process_event(event)
 
                 # Drain any additional queued events (batch processing)
+                drained = 0
                 while not self._event_queue.empty():
                     try:
                         event = self._event_queue.get_nowait()
                         self._process_event(event)
+                        drained += 1
                     except asyncio.QueueEmpty:
                         break
+
+                if drained > EVENT_QUEUE_MAX_SIZE // 2:
+                    logger.warning(
+                        "Queue backlog: drained %d events at once", drained
+                    )
 
                 # Throttle rendering
                 now = time.monotonic()
@@ -215,6 +232,12 @@ class LCDApp:
                         )
                     finally:
                         self._rendering = False
+
+                # Periodic GC
+                now = time.monotonic()
+                if now - last_gc_time > gc_interval:
+                    gc.collect()
+                    last_gc_time = now
 
             except asyncio.CancelledError:
                 break

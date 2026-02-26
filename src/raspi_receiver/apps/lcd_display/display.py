@@ -13,6 +13,7 @@ See docs/spec-raspi-receiver.md section 4 for the screen layout specification.
 
 from __future__ import annotations
 
+import gc
 import logging
 import struct
 import sys
@@ -89,6 +90,7 @@ class LCDDisplay:
         self.last_render_time: float = 0.0
         self._has_numpy: bool = False
         self._rgb565_buf: bytearray | None = None
+        self._render_count: int = 0
 
     @property
     def state(self) -> ScreenState:
@@ -294,9 +296,16 @@ class LCDDisplay:
             self._disp.ShowImage(rotated)
         else:
             _show_image_rgb565(self._disp, rotated, self._rgb565_buf)
+        del rotated  # Free 172KB PIL Image immediately
 
         self._state.mark_clean()
         self.last_render_time = time.monotonic()
+
+        # Periodic GC to prevent memory accumulation on Pi
+        self._render_count += 1
+        if self._render_count % 50 == 0:
+            gc.collect()
+
         return True
 
     def _draw_title_region(self) -> None:
@@ -508,6 +517,8 @@ def _show_image_rgb565(
             ">H", pix, i * 2,
             ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3),
         )
+
+    del pixels  # Free 172KB tobytes() result immediately
 
     disp.SetWindows(0, 0, disp.width, disp.height)
     disp.digital_write(disp.GPIO_DC_PIN, True)

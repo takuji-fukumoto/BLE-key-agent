@@ -122,9 +122,11 @@ class GATTServer:
         """Internal bless write callback.
 
         Delegates to the user-provided on_write callback with raw bytes.
+        Clears characteristic.value after reading to avoid holding
+        references to accumulated BLE write data.
         """
-        characteristic.value = value
         data = bytes(value)
+        characteristic.value = b""  # Clear to prevent data accumulation
 
         logger.debug("Write received: %d bytes", len(data))
 
