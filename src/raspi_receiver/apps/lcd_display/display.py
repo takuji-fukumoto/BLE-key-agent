@@ -95,7 +95,7 @@ class LCDDisplay:
         self._image: Optional[Image.Image] = None
         self._draw: Optional[ImageDraw.ImageDraw] = None
         self._fonts: dict[str, ImageFont.FreeTypeFont] = {}
-        self.last_render_time: float = 0.0
+        self._last_render_time: float = 0.0
         self._rgb565_buf: bytearray = bytearray(
             DISPLAY_WIDTH * DISPLAY_HEIGHT * 2
         )
@@ -105,6 +105,10 @@ class LCDDisplay:
     def state(self) -> ScreenState:
         """Current screen state."""
         return self._state
+
+    def time_since_render(self) -> float:
+        """Return seconds elapsed since the last render."""
+        return time.monotonic() - self._last_render_time
 
     def init(self) -> None:
         """Initialize LCD hardware and fonts.
@@ -275,7 +279,7 @@ class LCDDisplay:
             )
 
         self._state.mark_clean()
-        self.last_render_time = time.monotonic()
+        self._last_render_time = time.monotonic()
 
         # Periodic GC to prevent memory accumulation on Pi
         self._render_count += 1

@@ -340,8 +340,7 @@ class LCDApp:
                     )
 
                 # Throttle rendering
-                now = time.monotonic()
-                elapsed = now - self._display.last_render_time
+                elapsed = self._display.time_since_render()
                 if elapsed < min_interval:
                     await asyncio.sleep(min_interval - elapsed)
 
