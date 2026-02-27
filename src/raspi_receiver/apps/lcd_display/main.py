@@ -343,22 +343,7 @@ class LCDApp:
                     await asyncio.sleep(min_interval - elapsed)
 
                 # Render (offload blocking SPI I/O to thread pool)
-                if not self._rendering:
-                    self._rendering = True
-                    self._render_start_time = time.monotonic()
-                    try:
-                        logger.debug("render: start")
-                        loop = asyncio.get_running_loop()
-                        await loop.run_in_executor(
-                            None, self._display.render
-                        )
-                        render_ms = (
-                            time.monotonic() - self._render_start_time
-                        ) * 1000
-                        logger.debug("render: done (%.1fms)", render_ms)
-                    finally:
-                        self._rendering = False
-                        self._render_start_time = 0.0
+                await self._execute_render("render")
 
                 # Periodic GC
                 now = time.monotonic()
@@ -443,6 +428,29 @@ class LCDApp:
         parts.append(key_value)
         return " + ".join(parts)
 
+    async def _execute_render(self, label: str = "render") -> None:
+        """Execute a render cycle with timing and flag management.
+
+        Guards against concurrent renders via the _rendering flag.
+        Offloads blocking SPI I/O to a thread pool executor.
+
+        Args:
+            label: Log label to distinguish render call sites.
+        """
+        if self._rendering:
+            return
+        self._rendering = True
+        self._render_start_time = time.monotonic()
+        try:
+            logger.debug("%s: start", label)
+            loop = asyncio.get_running_loop()
+            await loop.run_in_executor(None, self._display.render)
+            render_ms = (time.monotonic() - self._render_start_time) * 1000
+            logger.debug("%s: done (%.1fms)", label, render_ms)
+        finally:
+            self._rendering = False
+            self._render_start_time = 0.0
+
     async def _button_poll_loop(self) -> None:
         """Poll physical buttons and handle presses.
 
@@ -469,23 +477,7 @@ class LCDApp:
                 # KEY1: clear buffer (on press edge)
                 if key1_pressed and not key1_was_pressed:
                     self._display.clear_buffer()
-                    if not self._rendering:
-                        self._rendering = True
-                        self._render_start_time = time.monotonic()
-                        try:
-                            logger.debug("render(btn): start")
-                            await loop.run_in_executor(
-                                None, self._display.render
-                            )
-                            render_ms = (
-                                time.monotonic() - self._render_start_time
-                            ) * 1000
-                            logger.debug(
-                                "render(btn): done (%.1fms)", render_ms
-                            )
-                        finally:
-                            self._rendering = False
-                            self._render_start_time = 0.0
+                    await self._execute_render("render(btn)")
                     logger.debug("KEY1 pressed: buffer cleared")
 
                 # KEY2: cycle backlight (on press edge)
