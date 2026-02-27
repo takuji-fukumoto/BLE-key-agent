@@ -259,6 +259,36 @@ class LCDApp:
 
     # --- Async tasks ---
 
+    async def _drain_event_queue(self) -> int:
+        """Wait for one event and drain any remaining queued events.
+
+        Blocks until an event arrives (with 0.5s timeout for shutdown
+        checks), then processes all additionally queued events in a batch.
+
+        Returns:
+            Number of additional events drained beyond the first one.
+            Returns -1 if timed out (no event received).
+        """
+        try:
+            event = await asyncio.wait_for(
+                self._event_queue.get(), timeout=0.5
+            )
+        except asyncio.TimeoutError:
+            return -1
+
+        self._process_event(event)
+
+        drained = 0
+        while not self._event_queue.empty():
+            try:
+                event = self._event_queue.get_nowait()
+                self._process_event(event)
+                drained += 1
+            except asyncio.QueueEmpty:
+                break
+
+        return drained
+
     async def _no_render_drain_loop(self) -> None:
         """Drain event queue and log events (no-render mode).
 
@@ -268,23 +298,7 @@ class LCDApp:
         """
         while not self._shutdown_event.is_set():
             try:
-                try:
-                    event = await asyncio.wait_for(
-                        self._event_queue.get(), timeout=0.5
-                    )
-                except asyncio.TimeoutError:
-                    continue
-
-                self._process_event(event)
-
-                # Drain additional queued events
-                while not self._event_queue.empty():
-                    try:
-                        event = self._event_queue.get_nowait()
-                        self._process_event(event)
-                    except asyncio.QueueEmpty:
-                        break
-
+                await self._drain_event_queue()
             except asyncio.CancelledError:
                 break
             except Exception:
@@ -305,31 +319,15 @@ class LCDApp:
 
         while not self._shutdown_event.is_set():
             try:
-                # Wait for an event (with timeout to check shutdown)
-                try:
-                    event = await asyncio.wait_for(
-                        self._event_queue.get(), timeout=0.5
-                    )
-                except asyncio.TimeoutError:
-                    # Periodic GC even when idle
+                # Wait for events and drain queue
+                drained = await self._drain_event_queue()
+                if drained < 0:
+                    # Timeout — periodic GC even when idle
                     now = time.monotonic()
                     if now - last_gc_time > gc_interval:
                         gc.collect()
                         last_gc_time = now
                     continue
-
-                # Process this event
-                self._process_event(event)
-
-                # Drain any additional queued events (batch processing)
-                drained = 0
-                while not self._event_queue.empty():
-                    try:
-                        event = self._event_queue.get_nowait()
-                        self._process_event(event)
-                        drained += 1
-                    except asyncio.QueueEmpty:
-                        break
 
                 if drained > EVENT_QUEUE_MAX_SIZE // 2:
                     logger.warning(
