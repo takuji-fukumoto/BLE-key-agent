@@ -15,6 +15,7 @@ import logging
 import os
 import resource
 import signal
+import threading
 import time
 from dataclasses import dataclass
 from logging.handlers import RotatingFileHandler
@@ -75,6 +76,8 @@ class LCDApp:
         self._shutdown_event = asyncio.Event()
         self._loop: asyncio.AbstractEventLoop | None = None
         self._rendering = False
+        self._render_start_time: float = 0.0
+        self._loop_responsive = False
 
     async def run(self) -> None:
         """Start the application and run until shutdown signal."""
@@ -96,6 +99,12 @@ class LCDApp:
         # Register signal handlers
         for sig in (signal.SIGINT, signal.SIGTERM):
             self._loop.add_signal_handler(sig, self._signal_shutdown)
+
+        # Start watchdog thread (independent of asyncio event loop)
+        watchdog = threading.Thread(
+            target=self._watchdog_thread, daemon=True, name="watchdog"
+        )
+        watchdog.start()
 
         # Run concurrent tasks
         tasks = [
@@ -233,13 +242,20 @@ class LCDApp:
                 # Render (offload blocking SPI I/O to thread pool)
                 if not self._rendering:
                     self._rendering = True
+                    self._render_start_time = time.monotonic()
                     try:
+                        logger.debug("render: start")
                         loop = asyncio.get_running_loop()
                         await loop.run_in_executor(
                             None, self._display.render
                         )
+                        render_ms = (
+                            time.monotonic() - self._render_start_time
+                        ) * 1000
+                        logger.debug("render: done (%.1fms)", render_ms)
                     finally:
                         self._rendering = False
+                        self._render_start_time = 0.0
 
                 # Periodic GC
                 now = time.monotonic()
@@ -346,12 +362,21 @@ class LCDApp:
                     self._display.clear_buffer()
                     if not self._rendering:
                         self._rendering = True
+                        self._render_start_time = time.monotonic()
                         try:
+                            logger.debug("render(btn): start")
                             await loop.run_in_executor(
                                 None, self._display.render
                             )
+                            render_ms = (
+                                time.monotonic() - self._render_start_time
+                            ) * 1000
+                            logger.debug(
+                                "render(btn): done (%.1fms)", render_ms
+                            )
                         finally:
                             self._rendering = False
+                            self._render_start_time = 0.0
                     logger.debug("KEY1 pressed: buffer cleared")
 
                 # KEY2: cycle backlight (on press edge)
@@ -412,6 +437,51 @@ class LCDApp:
                 break
             except Exception:
                 logger.exception("Error in health check loop")
+
+    def _watchdog_thread(self) -> None:
+        """Independent watchdog thread for freeze detection.
+
+        Runs outside the asyncio event loop to detect process-level hangs.
+        Logs every 5 seconds with:
+        - Whether the asyncio event loop is responsive
+        - Whether a render() call is currently blocked (and for how long)
+
+        If this thread's logs also stop, the freeze is at the GIL/process level.
+        """
+        watchdog_logger = logging.getLogger(__name__ + ".watchdog")
+        while not self._shutdown_event.is_set():
+            time.sleep(5.0)
+            if self._shutdown_event.is_set():
+                break
+
+            # Check asyncio event loop responsiveness
+            self._loop_responsive = False
+            loop = self._loop
+            if loop is not None and loop.is_running():
+                try:
+                    loop.call_soon_threadsafe(self._mark_loop_responsive)
+                except RuntimeError:
+                    pass
+                # Give the event loop a moment to process the callback
+                time.sleep(0.1)
+
+            loop_ok = self._loop_responsive
+
+            # Check render blocking
+            render_blocked = ""
+            if self._rendering and self._render_start_time > 0:
+                blocked_sec = time.monotonic() - self._render_start_time
+                render_blocked = f" | render_blocked={blocked_sec:.1f}s"
+
+            watchdog_logger.info(
+                "[WATCHDOG] alive | loop_responsive=%s%s",
+                loop_ok,
+                render_blocked,
+            )
+
+    def _mark_loop_responsive(self) -> None:
+        """Called from asyncio event loop to confirm responsiveness."""
+        self._loop_responsive = True
 
     def _signal_shutdown(self) -> None:
         """Handle shutdown signal."""

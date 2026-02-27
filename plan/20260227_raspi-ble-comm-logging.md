@@ -86,5 +86,47 @@ Mac側スクリプトは動作継続しているがPi側LCD画面が固まる症
 
 ## Phase5: 仕上げ
 
-- [ ] [Phase5] CLAUDE.md規約準拠チェック（型ヒント、docstring、import順等）
-- [ ] [Phase5] 動作確認
+- [x] [Phase5] CLAUDE.md規約準拠チェック（型ヒント、docstring、import順等）
+- [x] [Phase5] 動作確認
+
+---
+
+## 追加調査: フリーズ箇所の特定
+
+### 調査結果
+
+デバッグログを取得し分析した結果、以下が判明:
+- BLEデータ受信は正常（ハートビート3秒間隔で継続）
+- HEALTH check正常（queue=0, RSS=42.7MB, tasks=5）
+- エラー・例外なし
+- ログ出力自体が突然完全停止（ハートビート/HEALTHチェック/全ログ）
+- → **asyncioイベントループ + blessコールバックスレッド + 全てが同時にハング**
+- → **プロセス全体のフリーズ**（特定レイヤーの問題ではない）
+
+### 原因候補
+
+1. **bless/BlueZ/D-Busデッドロック** — blessがD-Bus経由でBlueZと通信中にデッドロック
+2. **SPI通信ハング** — ST7789ドライバのSPIバスが応答しなくなり、executor スレッドが永久ブロック
+3. **GILデッドロック** — C拡張経由のblessとSPIスレッドの競合
+
+### 切り分け方針
+
+asyncioに依存しない独立した `threading.Thread` ウォッチドッグを追加し、
+どのレイヤーでハングしているか特定する。
+
+- ウォッチドッグスレッドも止まる → プロセスレベルのハング（GIL or システムコール）
+- ウォッチドッグは動くがasyncioタスクが止まる → イベントループのブロック
+- render() の「開始」ログだけ出て「終了」が出ない → SPI I/Oハング
+
+## Phase2追加: ウォッチドッグスレッド実装
+
+- [ ] [Phase2] `main.py` にウォッチドッグスレッド（`_watchdog_thread`）を追加
+  - `threading.Thread(daemon=True)` で独立スレッドとして起動
+  - 5秒間隔でログ出力: `[WATCHDOG] alive | loop_responsive=... | render_blocked=...`
+  - asyncioイベントループの応答確認: `call_soon_threadsafe` でフラグを更新し、次回チェック時に確認
+  - `_rendering` フラグを監視して SPI I/O ブロックを検出
+  - ウォッチドッグ自体が止まった場合 → GIL/プロセスレベルのハングと判定可能
+
+- [ ] [Phase2] `main.py` の `_render_loop` と `_button_poll_loop` の render() 前後にタイムスタンプログ追加
+  - `logger.debug("render: start")` / `logger.debug("render: done (%.1fms)", elapsed_ms)`
+  - SPI I/O ハングの検出に使用
