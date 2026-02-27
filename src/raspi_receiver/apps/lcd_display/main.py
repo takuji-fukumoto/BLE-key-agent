@@ -92,50 +92,58 @@ class LCDApp:
         self._render_start_time: float = 0.0
         self._loop_responsive = False
 
-    async def run(self) -> None:
-        """Start the application and run until shutdown signal."""
-        self._loop = asyncio.get_running_loop()
+    async def _init_lcd(self) -> None:
+        """Initialize LCD hardware with retry.
 
-        # Initialize LCD hardware (skip in no-render mode)
-        # Retry up to 10 times with increasing delay — after a crash the
-        # SPI/GPIO hardware may need time to recover.
-        if self._display is not None:
-            max_retries = 10
-            for attempt in range(1, max_retries + 1):
-                try:
-                    self._display.init()
-                    self._display.render()  # Draw initial "Waiting..." screen
-                    break
-                except Exception:
-                    if attempt < max_retries:
-                        delay = min(attempt * 2, 10)  # 2,4,6,8,10,10,...s
-                        logger.warning(
-                            "LCD init failed (attempt %d/%d), "
-                            "retrying in %ds...",
-                            attempt,
-                            max_retries,
-                            delay,
-                            exc_info=True,
-                        )
-                        await asyncio.sleep(delay)
-                    else:
-                        logger.warning(
-                            "LCD init failed after %d attempts, "
-                            "falling back to no-render mode",
-                            max_retries,
-                            exc_info=True,
-                        )
-                        self._display = None
-                        self._no_render = True
-                        self._fell_back_to_no_render = True
+        Retries up to 10 times with increasing delay — after a crash the
+        SPI/GPIO hardware may need time to recover. Falls back to no-render
+        mode if all attempts fail.
+        """
+        if self._display is None:
+            return
 
-        # Register KeyReceiver callbacks
+        max_retries = 10
+        for attempt in range(1, max_retries + 1):
+            try:
+                self._display.init()
+                self._display.render()  # Draw initial "Waiting..." screen
+                return
+            except Exception:
+                if attempt < max_retries:
+                    delay = min(attempt * 2, 10)  # 2,4,6,8,10,10,...s
+                    logger.warning(
+                        "LCD init failed (attempt %d/%d), "
+                        "retrying in %ds...",
+                        attempt,
+                        max_retries,
+                        delay,
+                        exc_info=True,
+                    )
+                    await asyncio.sleep(delay)
+                else:
+                    logger.warning(
+                        "LCD init failed after %d attempts, "
+                        "falling back to no-render mode",
+                        max_retries,
+                        exc_info=True,
+                    )
+                    self._display = None
+                    self._no_render = True
+                    self._fell_back_to_no_render = True
+
+    def _register_callbacks(self) -> None:
+        """Register KeyReceiver event callbacks."""
         self._receiver.on_key_press = self._on_key_press
         self._receiver.on_key_release = self._on_key_release
         self._receiver.on_connect = self._on_connect
         self._receiver.on_disconnect = self._on_disconnect
 
-        # Start BLE receiver
+    async def run(self) -> None:
+        """Start the application and run until shutdown signal."""
+        self._loop = asyncio.get_running_loop()
+
+        await self._init_lcd()
+        self._register_callbacks()
         await self._receiver.start()
 
         # Register signal handlers
@@ -158,9 +166,6 @@ class LCDApp:
                     self._no_render_drain_loop(), name="no_render_drain"
                 )
             )
-            # If we fell back to no-render due to display init failure,
-            # schedule an auto-exit so the loop script can restart us
-            # with a fresh hardware reset and retry display init.
             if self._fell_back_to_no_render:
                 tasks.append(
                     asyncio.create_task(
