@@ -559,6 +559,10 @@ class LCDApp:
 def _setup_logging(debug: bool, log_dir: str) -> str:
     """Configure logging with console and file handlers.
 
+    File logs default to /tmp to avoid SD card I/O which can cause
+    process-wide freezes when the SD card has bad sectors.  Use
+    ``--log-dir logs`` to write to the SD card instead.
+
     Args:
         debug: If True, set console log level to DEBUG.
         log_dir: Directory for log files.
@@ -576,7 +580,7 @@ def _setup_logging(debug: bool, log_dir: str) -> str:
     console_handler.setFormatter(logging.Formatter(log_format))
     root_logger.addHandler(console_handler)
 
-    # File handler (always DEBUG level)
+    # File handler (INFO level to reduce write frequency)
     os.makedirs(log_dir, exist_ok=True)
     log_file = os.path.join(log_dir, "raspi_receiver.log")
     file_handler = RotatingFileHandler(
@@ -584,7 +588,7 @@ def _setup_logging(debug: bool, log_dir: str) -> str:
         maxBytes=150 * 1024,  # ~150KB ≈ 1000行
         backupCount=3,
     )
-    file_handler.setLevel(logging.DEBUG)
+    file_handler.setLevel(logging.DEBUG if debug else logging.INFO)
     file_handler.setFormatter(logging.Formatter(log_format))
     root_logger.addHandler(file_handler)
 
@@ -630,8 +634,8 @@ def main() -> None:
     )
     parser.add_argument(
         "--log-dir",
-        default="logs",
-        help="Directory for log files (default: logs/)",
+        default="/tmp/ble-key-agent",
+        help="Directory for log files (default: /tmp/ble-key-agent)",
     )
     parser.add_argument(
         "--spi-speed",

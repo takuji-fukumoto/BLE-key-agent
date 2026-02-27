@@ -33,8 +33,8 @@ else
     VENV_LABEL="system"
 fi
 
-# ログディレクトリのデフォルト値
-LOG_DIR="logs"
+# ログディレクトリのデフォルト値 (tmpfs でSD書き込み回避)
+LOG_DIR="/tmp/ble-key-agent"
 for arg in "$@"; do
     if [ "$prev_arg" = "--log-dir" ]; then
         LOG_DIR="$arg"
