@@ -97,7 +97,7 @@ class TestBleClientScan:
         mock_adv2.local_name = "Device2"
         mock_adv2.rssi = -70
 
-        with patch('mac_agent.ble_client.BleakScanner') as mock_scanner:
+        with patch('bleak.BleakScanner') as mock_scanner:
             mock_scanner.discover = AsyncMock(return_value={
                 "key1": (mock_device1, mock_adv1),
                 "key2": (mock_device2, mock_adv2),
@@ -122,7 +122,7 @@ class TestBleClientScan:
 
         client = BleClient(on_status_change=track_status)
 
-        with patch('mac_agent.ble_client.BleakScanner') as mock_scanner:
+        with patch('bleak.BleakScanner') as mock_scanner:
             mock_scanner.discover = AsyncMock(return_value={})
 
             await client.scan(timeout=5.0)
@@ -164,8 +164,8 @@ class TestBleClientConnect:
         mock_service.characteristics = [mock_char]
         mock_bleak_client.services = [mock_service]
 
-        with patch('mac_agent.ble_client.BleakScanner') as mock_scanner, \
-             patch('mac_agent.ble_client.BleakClient', return_value=mock_bleak_client):
+        with patch('bleak.BleakScanner') as mock_scanner, \
+             patch('bleak.BleakClient', return_value=mock_bleak_client):
 
             mock_scanner.find_device_by_address = AsyncMock(return_value=mock_device)
 
@@ -186,7 +186,7 @@ class TestBleClientConnect:
         callback = MagicMock()
         client = BleClient(on_status_change=callback)
 
-        with patch('mac_agent.ble_client.BleakScanner') as mock_scanner:
+        with patch('bleak.BleakScanner') as mock_scanner:
             mock_scanner.find_device_by_address = AsyncMock(return_value=None)
 
             success = await client.connect("AA:BB:CC:DD:EE:FF")
@@ -214,8 +214,8 @@ class TestBleClientConnect:
         mock_service.uuid = "00000000-0000-0000-0000-000000000000"
         mock_bleak_client.services = [mock_service]
 
-        with patch('mac_agent.ble_client.BleakScanner') as mock_scanner, \
-             patch('mac_agent.ble_client.BleakClient', return_value=mock_bleak_client):
+        with patch('bleak.BleakScanner') as mock_scanner, \
+             patch('bleak.BleakClient', return_value=mock_bleak_client):
 
             mock_scanner.find_device_by_address = AsyncMock(return_value=mock_device)
 
