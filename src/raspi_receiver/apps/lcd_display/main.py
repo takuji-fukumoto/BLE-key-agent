@@ -506,7 +506,7 @@ def _setup_logging(debug: bool, log_dir: str) -> str:
     log_file = os.path.join(log_dir, "raspi_receiver.log")
     file_handler = RotatingFileHandler(
         log_file,
-        maxBytes=5 * 1024 * 1024,  # 5MB
+        maxBytes=150 * 1024,  # ~150KB ≈ 1000行
         backupCount=3,
     )
     file_handler.setLevel(logging.DEBUG)
