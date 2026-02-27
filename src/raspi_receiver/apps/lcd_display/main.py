@@ -591,8 +591,35 @@ def _setup_logging(debug: bool, log_dir: str) -> str:
     return log_file
 
 
+def _write_crash_log(log_dir: str, message: str) -> None:
+    """Write crash info to a dedicated crash log file.
+
+    Uses direct file I/O (not logging module) to maximise
+    the chance of recording the crash even if the logging
+    system itself is broken.
+
+    Args:
+        log_dir: Directory for log files.
+        message: Crash message to write.
+    """
+    try:
+        os.makedirs(log_dir, exist_ok=True)
+        crash_file = os.path.join(log_dir, "crash.log")
+        with open(crash_file, "a") as f:
+            f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {message}\n")
+    except OSError:
+        pass  # SD card may be unwritable
+
+
 def main() -> None:
     """Application entry point."""
+    import faulthandler
+    import sys
+    import traceback
+
+    # Enable faulthandler to dump tracebacks on SIGSEGV/SIGBUS/SIGABRT
+    faulthandler.enable(file=sys.stderr, all_threads=True)
+
     parser = argparse.ArgumentParser(
         description="BLE Key Agent - Raspberry Pi LCD App",
     )
@@ -627,6 +654,14 @@ def main() -> None:
         asyncio.run(app.run())
     except KeyboardInterrupt:
         pass
+    except SystemExit:
+        pass
+    except BaseException:
+        msg = traceback.format_exc()
+        logger.critical("FATAL CRASH:\n%s", msg)
+        _write_crash_log(args.log_dir, f"CRASH:\n{msg}")
+        print(f"FATAL CRASH:\n{msg}", file=sys.stderr)
+        sys.exit(1)
 
 
 if __name__ == "__main__":
