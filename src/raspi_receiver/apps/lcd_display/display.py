@@ -13,12 +13,16 @@ See docs/spec-raspi-receiver.md section 4 for the screen layout specification.
 
 from __future__ import annotations
 
+import gc
 import logging
+import struct
 import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional
+
+import types
 
 from PIL import Image, ImageDraw, ImageFont
 
@@ -84,6 +88,9 @@ class LCDDisplay:
         self._draw: Optional[ImageDraw.ImageDraw] = None
         self._fonts: dict[str, ImageFont.FreeTypeFont] = {}
         self.last_render_time: float = 0.0
+        self._has_numpy: bool = False
+        self._rgb565_buf: bytearray | None = None
+        self._render_count: int = 0
 
     @property
     def state(self) -> ScreenState:
@@ -96,6 +103,10 @@ class LCDDisplay:
         Adds the example driver directory to sys.path, imports ST7789,
         and runs hardware initialization sequence.
 
+        If numpy is not available, the ST7789 driver's ShowImage method
+        is replaced with a pure-Python RGB565 conversion to avoid the
+        numpy dependency (pip install numpy often fails on ARM/Raspberry Pi).
+
         Raises:
             RuntimeError: If hardware initialization fails.
         """
@@ -107,9 +118,50 @@ class LCDDisplay:
         if driver_dir not in sys.path:
             sys.path.insert(0, driver_dir)
 
+        # --- Workaround: numpy optional ---
+        # config.py does `import numpy as np` at top level.
+        # Inject a stub if numpy is not installed (common on ARM).
+        _has_numpy = "numpy" in sys.modules
+        if not _has_numpy:
+            try:
+                import numpy  # noqa: F401
+                _has_numpy = True
+            except ImportError:
+                _stub = types.ModuleType("numpy")
+                _stub.uint8 = None  # type: ignore[attr-defined]
+                sys.modules["numpy"] = _stub
+                logger.info("numpy not available, using pure-Python RGB565")
+
+        # --- Workaround: PWM fallback ---
+        # config.py uses gpiozero.PWMOutputDevice for backlight.
+        # If no PWM-capable pin factory is available (lgpio/RPi.GPIO/pigpio),
+        # gpiozero raises PinPWMUnsupported. Replace with on/off fallback.
+        _patch_pwm = False
+        try:
+            import gpiozero
+            _test = gpiozero.PWMOutputDevice(24)
+            _test.close()
+        except Exception:
+            _patch_pwm = True
+            import gpiozero
+            gpiozero.PWMOutputDevice = _DigitalBacklightFallback  # type: ignore[attr-defined]
+            logger.warning(
+                "PWM not supported, backlight will be on/off only"
+            )
+
         import ST7789
 
         self._disp = ST7789.ST7789()
+
+        self._has_numpy = _has_numpy
+        if not _has_numpy:
+            self._rgb565_buf = bytearray(DISPLAY_WIDTH * DISPLAY_HEIGHT * 2)
+
+        # Restore original PWMOutputDevice if we patched it
+        if _patch_pwm:
+            import gpiozero as _gz
+            _gz.PWMOutputDevice = _OriginalPWM  # type: ignore[attr-defined]
+
         self._disp.Init()
         self._disp.clear()
         self._disp.bl_DutyCycle(self._backlight)
@@ -239,11 +291,21 @@ class LCDDisplay:
         self._draw_buffer_region()
 
         # Rotate and send to display
-        rotated = self._image.rotate(DISPLAY_ROTATION)
-        self._disp.ShowImage(rotated)
+        rotated = self._image.transpose(Image.Transpose.ROTATE_270)
+        if self._has_numpy:
+            self._disp.ShowImage(rotated)
+        else:
+            _show_image_rgb565(self._disp, rotated, self._rgb565_buf)
+        del rotated  # Free 172KB PIL Image immediately
 
         self._state.mark_clean()
         self.last_render_time = time.monotonic()
+
+        # Periodic GC to prevent memory accumulation on Pi
+        self._render_count += 1
+        if self._render_count % 50 == 0:
+            gc.collect()
+
         return True
 
     def _draw_title_region(self) -> None:
@@ -368,3 +430,97 @@ class LCDDisplay:
         elif key_type == "m":
             return key_value.capitalize()
         return key_value
+
+
+# --- PWM fallback for environments without lgpio/RPi.GPIO/pigpio ---
+# gpiozero's NativeFactory doesn't support PWM. When no PWM-capable pin
+# factory is available, we temporarily swap PWMOutputDevice with this
+# DigitalOutputDevice wrapper so that ST7789() construction succeeds.
+# Backlight becomes simple on/off (no dimming) but the app still works.
+
+_OriginalPWM: Any = None  # Saved before patching, restored after
+
+try:
+    import gpiozero as _gz
+
+    _OriginalPWM = _gz.PWMOutputDevice
+except Exception:
+    pass
+
+
+class _DigitalBacklightFallback:
+    """Drop-in replacement for PWMOutputDevice using on/off only."""
+
+    def __init__(self, pin: int, frequency: int = 1000, **kwargs: Any) -> None:
+        from gpiozero import DigitalOutputDevice
+
+        self._device = DigitalOutputDevice(pin)
+        self._value = 0.0
+
+    @property
+    def value(self) -> float:
+        return self._value
+
+    @value.setter
+    def value(self, v: float) -> None:
+        self._value = float(v)
+        if v > 0:
+            self._device.on()
+        else:
+            self._device.off()
+
+    @property
+    def frequency(self) -> int:
+        return 1000
+
+    @frequency.setter
+    def frequency(self, f: int) -> None:
+        pass  # no-op
+
+    def close(self) -> None:
+        self._device.close()
+
+
+def _show_image_rgb565(
+    disp: Any, image: Image.Image, buf: bytearray | None = None
+) -> None:
+    """Pure-Python ShowImage replacement (no numpy required).
+
+    Converts an RGB888 PIL Image to RGB565 and sends it to the
+    ST7789 LCD via SPI. Uses struct.pack_into for in-place buffer
+    writes and passes bytearray slices directly to SPI (no list copy).
+
+    Args:
+        disp: ST7789 driver instance.
+        image: PIL Image in RGB mode, must match display dimensions.
+        buf: Optional pre-allocated bytearray for RGB565 output.
+             If None, a new buffer is created each call.
+    """
+    imwidth, imheight = image.size
+    if imwidth != disp.width or imheight != disp.height:
+        raise ValueError(
+            f"Image must be {disp.width}x{disp.height}, "
+            f"got {imwidth}x{imheight}"
+        )
+
+    if image.mode != "RGB":
+        image = image.convert("RGB")
+
+    pixels = image.tobytes()
+    num_pixels = disp.width * disp.height
+    pix = buf if buf is not None else bytearray(num_pixels * 2)
+
+    for i in range(num_pixels):
+        off = i * 3
+        r, g, b = pixels[off], pixels[off + 1], pixels[off + 2]
+        struct.pack_into(
+            ">H", pix, i * 2,
+            ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3),
+        )
+
+    del pixels  # Free 172KB tobytes() result immediately
+
+    disp.SetWindows(0, 0, disp.width, disp.height)
+    disp.digital_write(disp.GPIO_DC_PIN, True)
+    for i in range(0, len(pix), 4096):
+        disp.spi_writebyte(pix[i:i + 4096])

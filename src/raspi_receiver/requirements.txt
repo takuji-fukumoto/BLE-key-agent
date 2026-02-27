@@ -1,0 +1,9 @@
+# Raspberry Pi側依存パッケージ
+#
+# ■ pip でインストールするもの（apt にない）
+bless>=0.3.0
+#
+# ■ apt でインストールするもの（pip だと lgpio 連携が壊れる）
+# sudo apt install python3-gpiozero python3-lgpio python3-spidev python3-pil python3-numpy
+#
+# 詳細は scripts/setup_raspi.sh を参照

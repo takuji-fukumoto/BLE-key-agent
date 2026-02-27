@@ -139,7 +139,8 @@ class TestGATTServerHandleWrite:
         server._handle_write(mock_char, test_data)
 
         on_write.assert_called_once_with(b'{"t":"c","v":"a","p":true}')
-        assert mock_char.value == test_data
+        # characteristic.value is cleared after read to prevent data accumulation
+        assert mock_char.value == b""
 
     def test_handle_write_without_callback(self) -> None:
         server = GATTServer()

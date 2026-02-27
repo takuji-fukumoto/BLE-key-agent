@@ -4,12 +4,14 @@ Tests use a mocked GATTServer to verify KeyReceiver's deserialization
 and callback dispatch logic without BLE hardware.
 """
 
+import threading
+import time
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from common.protocol import KeyEvent, KeyType, Modifiers
-from raspi_receiver.lib.key_receiver import KeyReceiver
+from raspi_receiver.lib.key_receiver import DISCONNECT_TIMEOUT_SEC, KeyReceiver
 from raspi_receiver.lib.types import ConnectionEvent
 
 
@@ -252,4 +254,229 @@ class TestKeyReceiverConnection:
         assert receiver.is_connected is True
 
         await receiver.stop()
+        assert receiver.is_connected is False
+
+
+class TestKeyReceiverHeartbeat:
+    """Tests for heartbeat event filtering."""
+
+    def _get_receiver_with_write_handler(self, mock_gatt_server):
+        mock_cls, _ = mock_gatt_server
+        receiver = KeyReceiver()
+        on_write = mock_cls.call_args.kwargs["on_write"]
+        return receiver, on_write
+
+    def test_heartbeat_not_propagated_to_key_press(self, mock_gatt_server) -> None:
+        receiver, on_write = self._get_receiver_with_write_handler(mock_gatt_server)
+
+        press_handler = MagicMock()
+        receiver.on_key_press = press_handler
+
+        hb = KeyEvent.heartbeat()
+        on_write(hb.serialize())
+
+        press_handler.assert_not_called()
+
+    def test_heartbeat_not_propagated_to_key_release(self, mock_gatt_server) -> None:
+        receiver, on_write = self._get_receiver_with_write_handler(mock_gatt_server)
+
+        release_handler = MagicMock()
+        receiver.on_key_release = release_handler
+
+        hb = KeyEvent.heartbeat()
+        on_write(hb.serialize())
+
+        release_handler.assert_not_called()
+
+    def test_heartbeat_triggers_connect_on_first_write(self, mock_gatt_server) -> None:
+        receiver, on_write = self._get_receiver_with_write_handler(mock_gatt_server)
+
+        connect_handler = MagicMock()
+        receiver.on_connect = connect_handler
+
+        hb = KeyEvent.heartbeat()
+        on_write(hb.serialize())
+
+        connect_handler.assert_called_once()
+        assert receiver.is_connected is True
+
+    def test_heartbeat_updates_last_receive_time(self, mock_gatt_server) -> None:
+        receiver, on_write = self._get_receiver_with_write_handler(mock_gatt_server)
+
+        before = time.monotonic()
+        hb = KeyEvent.heartbeat()
+        on_write(hb.serialize())
+        after = time.monotonic()
+
+        assert before <= receiver._last_receive_time <= after
+
+
+class TestKeyReceiverTimeout:
+    """Tests for timeout-based disconnect detection."""
+
+    def _get_receiver_with_write_handler(self, mock_gatt_server):
+        mock_cls, _ = mock_gatt_server
+        receiver = KeyReceiver()
+        on_write = mock_cls.call_args.kwargs["on_write"]
+        return receiver, on_write
+
+    @pytest.mark.asyncio
+    async def test_timeout_fires_on_disconnect(self, mock_gatt_server) -> None:
+        receiver, on_write = self._get_receiver_with_write_handler(mock_gatt_server)
+
+        disconnect_handler = MagicMock()
+        receiver.on_disconnect = disconnect_handler
+
+        # Simulate a connection
+        event = KeyEvent(key_type=KeyType.CHAR, value="a", press=True)
+        on_write(event.serialize())
+        assert receiver.is_connected is True
+
+        # Simulate time passing beyond timeout
+        receiver._last_receive_time = time.monotonic() - DISCONNECT_TIMEOUT_SEC - 1
+
+        # Start the timeout monitor and let it run one cycle
+        receiver._loop = MagicMock()
+        task = receiver._timeout_monitor()
+
+        # Run one iteration (sleep(1.0) will actually run)
+        # Use asyncio to run just enough for one check
+        import asyncio
+
+        monitor_task = asyncio.create_task(task)
+        await asyncio.sleep(1.5)  # Let monitor run one cycle
+        monitor_task.cancel()
+        try:
+            await monitor_task
+        except asyncio.CancelledError:
+            pass
+
+        assert receiver.is_connected is False
+        disconnect_handler.assert_called_once()
+        conn_event = disconnect_handler.call_args[0][0]
+        assert isinstance(conn_event, ConnectionEvent)
+        assert conn_event.connected is False
+
+    @pytest.mark.asyncio
+    async def test_no_timeout_when_receiving_data(self, mock_gatt_server) -> None:
+        receiver, on_write = self._get_receiver_with_write_handler(mock_gatt_server)
+
+        disconnect_handler = MagicMock()
+        receiver.on_disconnect = disconnect_handler
+
+        # Simulate a connection with recent data
+        event = KeyEvent(key_type=KeyType.CHAR, value="a", press=True)
+        on_write(event.serialize())
+
+        receiver._loop = MagicMock()
+        import asyncio
+
+        monitor_task = asyncio.create_task(receiver._timeout_monitor())
+        await asyncio.sleep(1.5)
+        monitor_task.cancel()
+        try:
+            await monitor_task
+        except asyncio.CancelledError:
+            pass
+
+        assert receiver.is_connected is True
+        disconnect_handler.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_reconnect_after_timeout(self, mock_gatt_server) -> None:
+        """After timeout disconnect, a new write should trigger on_connect again."""
+        receiver, on_write = self._get_receiver_with_write_handler(mock_gatt_server)
+
+        connect_handler = MagicMock()
+        disconnect_handler = MagicMock()
+        receiver.on_connect = connect_handler
+        receiver.on_disconnect = disconnect_handler
+
+        # First connection
+        event = KeyEvent(key_type=KeyType.CHAR, value="a", press=True)
+        on_write(event.serialize())
+        assert connect_handler.call_count == 1
+
+        # Simulate timeout disconnect
+        receiver._connected = False
+
+        # New write should re-trigger on_connect
+        on_write(event.serialize())
+        assert connect_handler.call_count == 2
+        assert receiver.is_connected is True
+
+    @pytest.mark.asyncio
+    async def test_start_creates_timeout_task(self, mock_gatt_server) -> None:
+        receiver, _ = self._get_receiver_with_write_handler(mock_gatt_server)
+        await receiver.start()
+
+        assert receiver._timeout_task is not None
+        assert not receiver._timeout_task.done()
+
+        await receiver.stop()
+
+    @pytest.mark.asyncio
+    async def test_stop_cancels_timeout_task(self, mock_gatt_server) -> None:
+        receiver, _ = self._get_receiver_with_write_handler(mock_gatt_server)
+        await receiver.start()
+
+        timeout_task = receiver._timeout_task
+        await receiver.stop()
+
+        assert receiver._timeout_task is None
+        assert timeout_task.cancelled()
+
+
+class TestKeyReceiverConnLock:
+    """Tests for Fix 4: _conn_lock thread safety on _connected flag."""
+
+    def _get_receiver_with_write_handler(self, mock_gatt_server):
+        mock_cls, _ = mock_gatt_server
+        receiver = KeyReceiver()
+        on_write = mock_cls.call_args.kwargs["on_write"]
+        return receiver, on_write
+
+    def test_conn_lock_exists(self, mock_gatt_server) -> None:
+        """Test that KeyReceiver has a _conn_lock attribute."""
+        receiver = KeyReceiver()
+        assert hasattr(receiver, "_conn_lock")
+        assert isinstance(receiver._conn_lock, type(threading.Lock()))
+
+    def test_concurrent_write_and_timeout_no_duplicate_callbacks(
+        self, mock_gatt_server
+    ) -> None:
+        """Test that on_connect does not fire twice under concurrent access."""
+        receiver, on_write = self._get_receiver_with_write_handler(mock_gatt_server)
+
+        connect_handler = MagicMock()
+        receiver.on_connect = connect_handler
+
+        # Simulate many concurrent writes from different threads
+        barrier = threading.Barrier(10)
+        event = KeyEvent(key_type=KeyType.CHAR, value="a", press=True)
+        data = event.serialize()
+
+        def write_from_thread() -> None:
+            barrier.wait()
+            on_write(data)
+
+        threads = [threading.Thread(target=write_from_thread) for _ in range(10)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        # on_connect should fire exactly once despite concurrent writes
+        connect_handler.assert_called_once()
+
+    def test_stop_with_conn_lock(self, mock_gatt_server) -> None:
+        """Test stop() properly resets _connected under lock."""
+        receiver, on_write = self._get_receiver_with_write_handler(mock_gatt_server)
+
+        event = KeyEvent(key_type=KeyType.CHAR, value="a", press=True)
+        on_write(event.serialize())
+        assert receiver.is_connected is True
+
+        import asyncio
+        asyncio.run(receiver.stop())
         assert receiver.is_connected is False

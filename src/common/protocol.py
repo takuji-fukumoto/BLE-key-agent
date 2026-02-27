@@ -22,11 +22,13 @@ class KeyType(str, Enum):
     - "c": Regular character key (e.g., 'a', '1', '@')
     - "s": Special key (e.g., 'enter', 'tab', 'backspace')
     - "m": Modifier key (e.g., 'shift', 'ctrl', 'alt', 'cmd')
+    - "h": Heartbeat (connection keep-alive, not propagated to app)
     """
 
     CHAR = "c"
     SPECIAL = "s"
     MODIFIER = "m"
+    HEARTBEAT = "h"
 
 
 @dataclass(frozen=True)
@@ -92,6 +94,11 @@ class KeyEvent:
     press: bool
     modifiers: Optional[Modifiers] = None
     timestamp: Optional[float] = None
+
+    @classmethod
+    def heartbeat(cls) -> KeyEvent:
+        """Create a heartbeat event for connection keep-alive."""
+        return cls(key_type=KeyType.HEARTBEAT, value="", press=False)
 
     def serialize(self) -> bytes:
         """Serialize to JSON UTF-8 bytes for BLE transmission.

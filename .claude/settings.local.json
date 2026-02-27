@@ -9,7 +9,9 @@
       "Bash(xargs:*)",
       "Bash(git checkout:*)",
       "Bash(gh auth status:*)",
-      "Bash(wc:*)"
+      "Bash(wc:*)",
+      "Bash(PYTHONPATH=src python -m pytest tests/test_protocol.py -v)",
+      "Bash(PYTHONPATH=src python -m pytest tests/test_key_receiver.py -v)"
     ]
   }
 }

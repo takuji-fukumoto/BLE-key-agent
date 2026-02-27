@@ -19,10 +19,14 @@ class TestKeyType:
     def test_modifier_value(self) -> None:
         assert KeyType.MODIFIER.value == "m"
 
+    def test_heartbeat_value(self) -> None:
+        assert KeyType.HEARTBEAT.value == "h"
+
     def test_from_string(self) -> None:
         assert KeyType("c") == KeyType.CHAR
         assert KeyType("s") == KeyType.SPECIAL
         assert KeyType("m") == KeyType.MODIFIER
+        assert KeyType("h") == KeyType.HEARTBEAT
 
     def test_invalid_value_raises(self) -> None:
         with pytest.raises(ValueError):
@@ -200,6 +204,36 @@ class TestKeyEventRoundTrip:
         restored = KeyEvent.deserialize(original.serialize())
         assert restored.key_type == KeyType.MODIFIER
         assert restored.value == "cmd"
+
+
+class TestHeartbeat:
+    """Tests for heartbeat event."""
+
+    def test_heartbeat_factory(self) -> None:
+        event = KeyEvent.heartbeat()
+        assert event.key_type == KeyType.HEARTBEAT
+        assert event.value == ""
+        assert event.press is False
+        assert event.modifiers is None
+        assert event.timestamp is None
+
+    def test_heartbeat_serialize(self) -> None:
+        event = KeyEvent.heartbeat()
+        data = event.serialize()
+        obj = json.loads(data)
+        assert obj == {"t": "h", "v": "", "p": False}
+
+    def test_heartbeat_roundtrip(self) -> None:
+        original = KeyEvent.heartbeat()
+        restored = KeyEvent.deserialize(original.serialize())
+        assert restored.key_type == KeyType.HEARTBEAT
+        assert restored.value == ""
+        assert restored.press is False
+
+    def test_heartbeat_deserialize(self) -> None:
+        raw = b'{"t":"h","v":"","p":false}'
+        event = KeyEvent.deserialize(raw)
+        assert event.key_type == KeyType.HEARTBEAT
 
 
 class TestKeyEventEdgeCases:

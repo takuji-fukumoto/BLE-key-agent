@@ -8,15 +8,15 @@ Mac のキー入力を BLE GATT 通信で Raspberry Pi に送信し、LCD に表
 ┌──────────────────────┐        BLE GATT Write        ┌──────────────────────┐
 │     Mac (Central)    │ ──────────────────────────▶  │  Raspberry Pi        │
 │                      │                              │  (Peripheral)        │
-│  Flet GUI            │                              │                      │
-│  + pynput キー監視   │                              │  BLE受信ライブラリ    │
-│  + bleak BLE通信     │                              │  + LCD表示アプリ      │
+│  pynput キー監視     │                              │                      │
+│  + bleak BLE通信     │                              │  BLE受信ライブラリ    │
+│                      │                              │  + LCD表示アプリ      │
 └──────────────────────┘                              └──────────────────────┘
 ```
 
 | デバイス | BLE 役割 | 主な機能 |
 |---|---|---|
-| Mac | Central（親） | キー入力監視 → BLE送信、Flet GUIで接続管理 |
+| Mac | Central（親） | キー入力監視 → BLE送信、CLIで接続管理 |
 | Raspberry Pi | Peripheral（子） | BLE受信 → LCD表示（1.3inch LCD HAT） |
 
 ### 主な特徴
@@ -33,7 +33,6 @@ Mac のキー入力を BLE GATT 通信で Raspberry Pi に送信し、LCD に表
 |---|---|
 | bleak >= 0.21.0 | BLE Central 通信 |
 | pynput >= 1.7.6 | グローバルキー監視 |
-| flet | GUI フレームワーク |
 | asyncio | 非同期 I/O |
 
 ### Raspberry Pi 側
@@ -48,127 +47,138 @@ Mac のキー入力を BLE GATT 通信で Raspberry Pi に送信し、LCD に表
 
 ```
 BLE-key-agent/
+├── scripts/                       # スクリプト
+│   ├── setup_mac.sh              #   Mac 用セットアップ
+│   ├── setup_raspi.sh            #   Raspberry Pi 用セットアップ
+│   ├── run_mac.sh                #   Mac エージェント起動
+│   └── run_raspi.sh              #   Pi LCD アプリ起動
+├── src/                           # メインアプリケーション
+│   ├── common/                   #   Mac/Pi 共有定義（UUID, プロトコル）
+│   ├── mac_agent/                #   Mac 側エージェント
+│   │   ├── main.py               #     エントリポイント
+│   │   ├── ble_client.py         #     BLE Central クライアント
+│   │   └── key_monitor.py        #     キー入力監視
+│   └── raspi_receiver/           #   Raspberry Pi 側
+│       ├── lib/                  #     BLE 受信ライブラリ
+│       └── apps/lcd_display/     #     LCD 表示アプリ
+├── poc/                           # PoC 実装（技術検証用）
 ├── docs/                          # 仕様書
 ├── reports/                       # 技術調査レポート
-├── example/                       # ハードウェアサンプル
-├── poc/                           # PoC 実装（参照用）
-├── src/
-│   ├── common/                    # Mac/Pi 共有定義
-│   │   ├── uuids.py              #   UUID 定数
-│   │   └── protocol.py           #   キーデータフォーマット
-│   ├── mac_agent/                 # Mac 側 Flet エージェントアプリ
-│   │   ├── main.py               #   エントリポイント
-│   │   ├── ble_client.py         #   BLE Central 管理
-│   │   ├── key_monitor.py        #   キー入力監視
-│   │   └── views/                #   GUI 画面
-│   └── raspi_receiver/            # Raspberry Pi 側
-│       ├── lib/                   #   BLE 受信ライブラリ（再利用可能）
-│       │   ├── gatt_server.py     #     GATT サーバー
-│       │   ├── key_receiver.py    #     キー受信 + コールバック
-│       │   └── types.py           #     型定義
-│       └── apps/
-│           └── lcd_display/       #   LCD 表示アプリ
-│               ├── main.py        #     エントリポイント
-│               ├── display.py     #     LCD 描画ロジック
-│               └── config.py      #     GPIO/SPI 設定
 └── tests/                         # テスト
 ```
 
-## 開発環境構築
+## クイックスタート
 
 ### 前提条件
 
-- Python 3.10 以上
-- Mac: macOS（Bluetooth 対応）
-- Raspberry Pi: Raspberry Pi OS、Bluetooth アダプタ有効、1.3inch LCD HAT（ST7789, 240x240, SPI）
+- **Python 3.10 以上**
+- **Mac**: macOS（Bluetooth 対応）
+- **Raspberry Pi**: Raspberry Pi OS（Bookworm 推奨）、Bluetooth アダプタ有効
 
 ### Mac 側セットアップ
 
 ```bash
-# リポジトリのクローン
+# 1. リポジトリのクローン
 git clone https://github.com/takuji-fukumoto/BLE-key-agent.git
 cd BLE-key-agent
 
-# 仮想環境の作成・有効化
-python3 -m venv .venv
-source .venv/bin/activate
-
-# 依存パッケージのインストール
-pip install bleak>=0.21.0 pynput>=1.7.6 flet
-
-# テスト用
-pip install pytest pytest-asyncio
+# 2. セットアップスクリプトの実行
+chmod +x scripts/setup_mac.sh
+./scripts/setup_mac.sh
 ```
 
-**macOS 権限設定:**
+**手動インストールの場合:**
+```bash
+pip3 install --user bleak>=0.21.0 pynput>=1.7.6
+```
 
-1. **アクセシビリティ権限**（pynput のグローバルキー監視に必要）
-   - システム設定 → プライバシーとセキュリティ → アクセシビリティ
-   - ターミナルまたは使用する IDE を追加
-2. **Bluetooth 権限** — 初回スキャン時にシステムダイアログが表示される
+**macOS 権限設定（初回のみ）:**
+
+システム設定 → プライバシーとセキュリティ で以下を許可:
+- **アクセシビリティ** → ターミナルまたは IDE を追加
+- **入力監視** → ターミナルまたは IDE を追加
+- **Bluetooth** → 初回スキャン時にダイアログが表示される
 
 ### Raspberry Pi 側セットアップ
 
 ```bash
-# リポジトリのクローン
+# 1. リポジトリのクローン
 git clone https://github.com/takuji-fukumoto/BLE-key-agent.git
 cd BLE-key-agent
 
-# BlueZ と Bluetooth サービスのセットアップ
-sudo chmod +x poc/ble_gatt/setup_raspi.sh
-sudo ./poc/ble_gatt/setup_raspi.sh
+# 2. セットアップスクリプトの実行（sudo 必要）
+chmod +x scripts/setup_raspi.sh
+sudo ./scripts/setup_raspi.sh
 
-# 仮想環境の作成・有効化
-python3 -m venv .venv
-source .venv/bin/activate
+# 3. SPI/GPIO 設定変更時は再起動
+sudo reboot
+```
 
-# 依存パッケージのインストール
-pip install bless>=0.3.0 Pillow spidev gpiozero
-
-# SPI の有効化（未設定の場合）
-sudo raspi-config nonint do_spi 0
+**手動インストールの場合:**
+```bash
+sudo apt install -y bluez python3-pip
+pip3 install --break-system-packages bless>=0.3.0 Pillow gpiozero spidev
 ```
 
 ## 利用方法
 
-### 1. Raspberry Pi 側（受信・LCD 表示）
+### 1. Raspberry Pi 側（LCD 表示アプリ）
 
-Pi 側を先に起動し、BLE アドバタイズを開始させる。
-
-```bash
-cd BLE-key-agent
-source .venv/bin/activate
-
-# LCD 表示アプリの起動
-sudo python -m src.raspi_receiver.apps.lcd_display.main
-```
-
-> `sudo` は BLE アドバタイズと GPIO/SPI アクセスに必要。
-
-起動すると `RasPi-KeyAgent` としてアドバタイズが開始され、LCD に接続待ちが表示される。
-
-### 2. Mac 側（キー送信 GUI）
+Pi 側を先に起動し、BLE アドバタイズを開始。
 
 ```bash
 cd BLE-key-agent
-source .venv/bin/activate
-
-# Mac エージェントアプリの起動
-python -m src.mac_agent.main
+sudo ./scripts/run_raspi.sh
 ```
 
-GUI が起動したら:
-1. **スキャン** ボタンで BLE デバイスを検索
-2. デバイス一覧から `RasPi-KeyAgent` を選択して **接続**
-3. **キーモニタ ON** でキー入力の送信を開始
+起動すると `RasPi-KeyAgent` としてアドバタイズが開始され、LCD に接続待ち画面が表示される。
 
-Mac でのキー入力がリアルタイムに Pi の LCD に表示される。
+> **Note**: `sudo` は BLE アドバタイズと GPIO/SPI アクセスに必要
+
+### 2. Mac 側（キー送信エージェント）
+
+```bash
+cd BLE-key-agent
+./scripts/run_mac.sh
+```
+
+対話形式で:
+1. BLE デバイスをスキャン
+2. デバイス番号を選択して接続
+3. キー入力の送信開始（Esc キーで終了）
+
+**デバイス名を指定して直接接続:**
+```bash
+./scripts/run_mac.sh "RasPi-KeyAgent"
+```
+
+接続後、Mac でのキー入力がリアルタイムに Pi の LCD に表示される。
 
 ### テストの実行
 
 ```bash
-pytest tests/
+pip3 install --user pytest pytest-asyncio
+cd BLE-key-agent
+PYTHONPATH=src pytest tests/
 ```
+
+## トラブルシューティング
+
+### Mac
+
+| 症状 | 対処法 |
+|---|---|
+| キーが検出されない | システム設定でアクセシビリティ・入力監視を確認 |
+| BLE スキャンでデバイスが見つからない | Bluetooth をオン、Pi 側が起動済みか確認 |
+
+### Raspberry Pi
+
+| 症状 | 対処法 |
+|---|---|
+| hci0 が見つからない | `hciconfig` で確認、`sudo hciconfig hci0 up` |
+| アドバタイズが開始されない | `journalctl -u bluetooth -f` でログ確認 |
+| Permission denied | `sudo` で実行 |
+| LCD が表示されない | SPI 有効化を確認: `ls /dev/spidev*` |
 
 ## BLE 通信仕様（概要）
 
