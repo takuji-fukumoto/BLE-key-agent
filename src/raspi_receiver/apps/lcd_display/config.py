@@ -101,3 +101,15 @@ RENDER_MIN_INTERVAL_MS: int = 50  # Minimum ms between LCD re-draws (20 FPS cap)
 INPUT_BUFFER_MAX_LENGTH: int = 200  # Max characters in input buffer
 BUTTON_POLL_INTERVAL_MS: int = 100  # Physical button polling interval
 EVENT_QUEUE_MAX_SIZE: int = 128  # Max pending display events (backpressure)
+
+# --- SPI Configuration ---
+
+# SPI bus speed in Hz. Reduced from driver default (40MHz) because the
+# ST7789V datasheet specifies a maximum write clock of ~15MHz.  On
+# Raspberry Pi the SPI divider rounds to 128MHz/8 ≈ 15.6MHz actual.
+SPI_SPEED_HZ: int = 20_000_000
+
+# Timeout for a single render operation in the SPI subprocess.
+# If the subprocess does not respond within this time, it is killed
+# and restarted automatically.
+SPI_RENDER_TIMEOUT_SEC: float = 5.0

@@ -157,16 +157,16 @@ class TestLCDDisplayStateUpdates:
 
     def test_cycle_backlight(self) -> None:
         display = LCDDisplay(backlight=50)
-        mock_disp = MagicMock()
-        display._disp = mock_disp
+        mock_proxy = MagicMock()
+        display._render_proxy = mock_proxy
         new_level = display.cycle_backlight()
         assert new_level == 75
-        mock_disp.bl_DutyCycle.assert_called_with(75)
+        mock_proxy.set_backlight.assert_called_with(75)
 
     def test_cycle_backlight_wraps(self) -> None:
         display = LCDDisplay(backlight=100)
-        mock_disp = MagicMock()
-        display._disp = mock_disp
+        mock_proxy = MagicMock()
+        display._render_proxy = mock_proxy
         new_level = display.cycle_backlight()
         assert new_level == 0
 
@@ -556,16 +556,12 @@ class TestEventQueueBackpressure:
 # --- TestShowImageRgb565 ---
 
 
-class TestShowImageRgb565:
-    """Tests for Fix 1: optimized _show_image_rgb565 with struct.pack_into."""
+class TestConvertToRgb565:
+    """Tests for _convert_to_rgb565 pure-Python RGB888→RGB565 conversion."""
 
     def test_rgb565_conversion_correctness(self) -> None:
         """Test known RGB888 values produce correct RGB565 output."""
-        from raspi_receiver.apps.lcd_display.display import _show_image_rgb565
-
-        mock_disp = MagicMock()
-        mock_disp.width = 2
-        mock_disp.height = 1
+        from raspi_receiver.apps.lcd_display.display import _convert_to_rgb565
 
         # Create 2x1 image: red pixel + blue pixel
         img = Image.new("RGB", (2, 1))
@@ -573,7 +569,7 @@ class TestShowImageRgb565:
         img.putpixel((1, 0), (0, 0, 255))  # Blue
 
         buf = bytearray(2 * 1 * 2)
-        _show_image_rgb565(mock_disp, img, buf)
+        _convert_to_rgb565(img, buf)
 
         import struct
 
@@ -585,70 +581,49 @@ class TestShowImageRgb565:
         pixel1 = struct.unpack_from(">H", buf, 2)[0]
         assert pixel1 == 0x001F, f"Blue pixel: expected 0x001F, got 0x{pixel1:04X}"
 
-    def test_spi_receives_bytearray_not_list(self) -> None:
-        """Test SPI writebyte receives bytearray slices, not list."""
-        from raspi_receiver.apps.lcd_display.display import _show_image_rgb565
-
-        mock_disp = MagicMock()
-        mock_disp.width = 2
-        mock_disp.height = 1
+    def test_returns_bytearray(self) -> None:
+        """Test conversion returns bytearray."""
+        from raspi_receiver.apps.lcd_display.display import _convert_to_rgb565
 
         img = Image.new("RGB", (2, 1), (128, 128, 128))
-        buf = bytearray(2 * 1 * 2)
-        _show_image_rgb565(mock_disp, img, buf)
-
-        for call in mock_disp.spi_writebyte.call_args_list:
-            arg = call[0][0]
-            assert isinstance(arg, bytearray), (
-                f"Expected bytearray, got {type(arg).__name__}"
-            )
+        result = _convert_to_rgb565(img)
+        assert isinstance(result, bytearray)
+        assert len(result) == 2 * 1 * 2
 
     def test_reuses_provided_buffer(self) -> None:
         """Test that the provided buffer is written to in-place."""
-        from raspi_receiver.apps.lcd_display.display import _show_image_rgb565
-
-        mock_disp = MagicMock()
-        mock_disp.width = 1
-        mock_disp.height = 1
+        from raspi_receiver.apps.lcd_display.display import _convert_to_rgb565
 
         img = Image.new("RGB", (1, 1), (255, 255, 255))
         buf = bytearray(2)
-        _show_image_rgb565(mock_disp, img, buf)
+        result = _convert_to_rgb565(img, buf)
 
         # White: should produce non-zero bytes in our buffer
         assert buf != bytearray(2), "Buffer should have been written to"
-
-    def test_size_mismatch_raises(self) -> None:
-        """Test ValueError on image/display size mismatch."""
-        from raspi_receiver.apps.lcd_display.display import _show_image_rgb565
-
-        mock_disp = MagicMock()
-        mock_disp.width = 240
-        mock_disp.height = 240
-
-        img = Image.new("RGB", (100, 100))
-        with pytest.raises(ValueError, match="240x240"):
-            _show_image_rgb565(mock_disp, img)
+        assert result is buf, "Should return the same buffer object"
 
 
 # --- TestRenderOptimization ---
 
 
 class TestRenderOptimization:
-    """Tests for Fix 2: render() uses transpose() and numpy-aware dispatch."""
+    """Tests for render() using transpose() and subprocess-based SPI."""
 
     def test_render_uses_transpose_not_rotate(self) -> None:
         """Test render() calls transpose(ROTATE_270) instead of rotate()."""
         display = LCDDisplay()
         mock_image = MagicMock(spec=Image.Image)
         mock_draw = MagicMock(spec=ImageDraw.ImageDraw)
-        mock_disp = MagicMock()
+        mock_proxy = MagicMock()
         mock_transposed = MagicMock(spec=Image.Image)
+        mock_transposed.size = (240, 240)
+        mock_transposed.mode = "RGB"
+        mock_transposed.tobytes.return_value = b"\x00" * (240 * 240 * 3)
         mock_image.transpose.return_value = mock_transposed
 
         display._image = mock_image
         display._draw = mock_draw
-        display._disp = mock_disp
+        display._render_proxy = mock_proxy
         display._fonts = {
             "title": MagicMock(),
             "status": MagicMock(),
@@ -656,7 +631,6 @@ class TestRenderOptimization:
             "modifier": MagicMock(),
             "buffer": MagicMock(),
         }
-        display._has_numpy = True
         display._state.mark_dirty()
 
         display.render()
@@ -666,18 +640,21 @@ class TestRenderOptimization:
         )
         mock_image.rotate.assert_not_called()
 
-    def test_render_calls_show_image_with_numpy(self) -> None:
-        """Test render() uses disp.ShowImage when numpy is available."""
+    def test_render_sends_to_proxy(self) -> None:
+        """Test render() sends RGB565 data to RenderProxy."""
         display = LCDDisplay()
         mock_image = MagicMock(spec=Image.Image)
         mock_draw = MagicMock(spec=ImageDraw.ImageDraw)
-        mock_disp = MagicMock()
+        mock_proxy = MagicMock()
         mock_transposed = MagicMock(spec=Image.Image)
+        mock_transposed.size = (240, 240)
+        mock_transposed.mode = "RGB"
+        mock_transposed.tobytes.return_value = b"\x00" * (240 * 240 * 3)
         mock_image.transpose.return_value = mock_transposed
 
         display._image = mock_image
         display._draw = mock_draw
-        display._disp = mock_disp
+        display._render_proxy = mock_proxy
         display._fonts = {
             "title": MagicMock(),
             "status": MagicMock(),
@@ -685,12 +662,14 @@ class TestRenderOptimization:
             "modifier": MagicMock(),
             "buffer": MagicMock(),
         }
-        display._has_numpy = True
         display._state.mark_dirty()
 
         display.render()
 
-        mock_disp.ShowImage.assert_called_once_with(mock_transposed)
+        mock_proxy.render.assert_called_once()
+        call_args = mock_proxy.render.call_args
+        assert call_args[0][1] == 240  # width
+        assert call_args[0][2] == 240  # height
 
 
 # --- TestEnqueueExceptionSafety ---

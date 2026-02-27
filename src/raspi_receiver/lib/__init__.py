@@ -12,11 +12,12 @@ Usage:
     await receiver.start()
 """
 
-from raspi_receiver.lib.key_receiver import KeyReceiver
+from raspi_receiver.lib.key_receiver import KeyReceiver, ReceiverStats
 from raspi_receiver.lib.types import ConnectionEvent, KeyEvent, KeyType, Modifiers
 
 __all__ = [
     "KeyReceiver",
+    "ReceiverStats",
     "ConnectionEvent",
     "KeyEvent",
     "KeyType",

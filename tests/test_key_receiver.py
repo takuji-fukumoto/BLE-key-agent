@@ -11,7 +11,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from common.protocol import KeyEvent, KeyType, Modifiers
-from raspi_receiver.lib.key_receiver import DISCONNECT_TIMEOUT_SEC, KeyReceiver
+from raspi_receiver.lib.key_receiver import (
+    DISCONNECT_TIMEOUT_SEC,
+    KeyReceiver,
+    ReceiverStats,
+)
 from raspi_receiver.lib.types import ConnectionEvent
 
 
@@ -480,3 +484,129 @@ class TestKeyReceiverConnLock:
         import asyncio
         asyncio.run(receiver.stop())
         assert receiver.is_connected is False
+
+
+class TestReceiverStats:
+    """Tests for ReceiverStats counter tracking."""
+
+    def _get_receiver_with_write_handler(self, mock_gatt_server):
+        mock_cls, _ = mock_gatt_server
+        receiver = KeyReceiver()
+        on_write = mock_cls.call_args.kwargs["on_write"]
+        return receiver, on_write
+
+    def test_initial_stats_are_zero(self, mock_gatt_server) -> None:
+        receiver = KeyReceiver()
+        stats = receiver.stats
+        assert stats.key_events_received == 0
+        assert stats.heartbeats_received == 0
+        assert stats.deserialize_errors == 0
+        assert stats.connections == 0
+        assert stats.disconnections == 0
+        assert stats.last_receive_time == 0.0
+
+    def test_stats_returns_copy(self, mock_gatt_server) -> None:
+        receiver = KeyReceiver()
+        stats1 = receiver.stats
+        stats1.key_events_received = 999
+        stats2 = receiver.stats
+        assert stats2.key_events_received == 0
+
+    def test_key_event_increments_counter(self, mock_gatt_server) -> None:
+        receiver, on_write = self._get_receiver_with_write_handler(mock_gatt_server)
+
+        event = KeyEvent(key_type=KeyType.CHAR, value="a", press=True)
+        on_write(event.serialize())
+        on_write(event.serialize())
+
+        stats = receiver.stats
+        assert stats.key_events_received == 2
+
+    def test_key_release_increments_counter(self, mock_gatt_server) -> None:
+        receiver, on_write = self._get_receiver_with_write_handler(mock_gatt_server)
+
+        event = KeyEvent(key_type=KeyType.CHAR, value="a", press=False)
+        on_write(event.serialize())
+
+        stats = receiver.stats
+        assert stats.key_events_received == 1
+
+    def test_heartbeat_increments_counter(self, mock_gatt_server) -> None:
+        receiver, on_write = self._get_receiver_with_write_handler(mock_gatt_server)
+
+        hb = KeyEvent.heartbeat()
+        on_write(hb.serialize())
+        on_write(hb.serialize())
+        on_write(hb.serialize())
+
+        stats = receiver.stats
+        assert stats.heartbeats_received == 3
+        assert stats.key_events_received == 0
+
+    def test_deserialize_error_increments_counter(self, mock_gatt_server) -> None:
+        receiver, on_write = self._get_receiver_with_write_handler(mock_gatt_server)
+
+        on_write(b"invalid json")
+        on_write(b"also bad")
+
+        stats = receiver.stats
+        assert stats.deserialize_errors == 2
+
+    def test_connection_increments_counter(self, mock_gatt_server) -> None:
+        receiver, on_write = self._get_receiver_with_write_handler(mock_gatt_server)
+
+        event = KeyEvent(key_type=KeyType.CHAR, value="a", press=True)
+        on_write(event.serialize())
+
+        stats = receiver.stats
+        assert stats.connections == 1
+
+    def test_reconnection_increments_counter(self, mock_gatt_server) -> None:
+        receiver, on_write = self._get_receiver_with_write_handler(mock_gatt_server)
+
+        event = KeyEvent(key_type=KeyType.CHAR, value="a", press=True)
+        on_write(event.serialize())
+        assert receiver.stats.connections == 1
+
+        # Simulate disconnect
+        receiver._connected = False
+
+        # Reconnect
+        on_write(event.serialize())
+        assert receiver.stats.connections == 2
+
+    @pytest.mark.asyncio
+    async def test_timeout_disconnect_increments_counter(
+        self, mock_gatt_server
+    ) -> None:
+        receiver, on_write = self._get_receiver_with_write_handler(mock_gatt_server)
+
+        event = KeyEvent(key_type=KeyType.CHAR, value="a", press=True)
+        on_write(event.serialize())
+
+        # Force timeout
+        receiver._last_receive_time = time.monotonic() - DISCONNECT_TIMEOUT_SEC - 1
+        receiver._loop = MagicMock()
+
+        import asyncio
+
+        monitor_task = asyncio.create_task(receiver._timeout_monitor())
+        await asyncio.sleep(1.5)
+        monitor_task.cancel()
+        try:
+            await monitor_task
+        except asyncio.CancelledError:
+            pass
+
+        assert receiver.stats.disconnections == 1
+
+    def test_last_receive_time_updated(self, mock_gatt_server) -> None:
+        receiver, on_write = self._get_receiver_with_write_handler(mock_gatt_server)
+
+        before = time.monotonic()
+        event = KeyEvent(key_type=KeyType.CHAR, value="a", press=True)
+        on_write(event.serialize())
+        after = time.monotonic()
+
+        stats = receiver.stats
+        assert before <= stats.last_receive_time <= after

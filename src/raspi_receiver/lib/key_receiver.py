@@ -14,9 +14,11 @@ See docs/spec-raspi-receiver.md section 3.3 for the interface specification.
 from __future__ import annotations
 
 import asyncio
+import copy
 import logging
 import threading
 import time
+from dataclasses import dataclass
 from typing import Callable, Optional
 
 from common.protocol import KeyEvent, KeyType
@@ -30,6 +32,18 @@ logger = logging.getLogger(__name__)
 # Disconnect if no data received for this many seconds.
 # Should be >= 3x the Mac-side heartbeat interval (3s) to absorb jitter.
 DISCONNECT_TIMEOUT_SEC: float = 10.0
+
+
+@dataclass
+class ReceiverStats:
+    """BLE receiver statistics for monitoring and diagnostics."""
+
+    key_events_received: int = 0
+    heartbeats_received: int = 0
+    deserialize_errors: int = 0
+    connections: int = 0
+    disconnections: int = 0
+    last_receive_time: float = 0.0
 
 
 class KeyReceiver:
@@ -57,12 +71,18 @@ class KeyReceiver:
         self._last_receive_time: float = 0.0
         self._timeout_task: Optional[asyncio.Task[None]] = None
         self._loop: Optional[asyncio.AbstractEventLoop] = None
+        self._stats = ReceiverStats()
 
         # Application callbacks (set by user)
         self.on_key_press: Optional[Callable[[KeyEvent], None]] = None
         self.on_key_release: Optional[Callable[[KeyEvent], None]] = None
         self.on_connect: Optional[Callable[[ConnectionEvent], None]] = None
         self.on_disconnect: Optional[Callable[[ConnectionEvent], None]] = None
+
+    @property
+    def stats(self) -> ReceiverStats:
+        """Return a snapshot copy of receiver statistics."""
+        return copy.copy(self._stats)
 
     async def start(self) -> None:
         """Start the GATT server and begin receiving key events.
@@ -112,6 +132,7 @@ class KeyReceiver:
         Invalid data is logged and skipped per spec.
         """
         self._last_receive_time = time.monotonic()
+        self._stats.last_receive_time = self._last_receive_time
 
         with self._conn_lock:
             was_connected = self._connected
@@ -119,6 +140,7 @@ class KeyReceiver:
                 self._connected = True
 
         if not was_connected:
+            self._stats.connections += 1
             logger.info("Client connected (first write received)")
             if self.on_connect is not None:
                 try:
@@ -129,13 +151,17 @@ class KeyReceiver:
         try:
             event = KeyEvent.deserialize(data)
         except ValueError:
+            self._stats.deserialize_errors += 1
             logger.warning("Failed to deserialize key event, skipping: %r", data)
             return
 
         # Heartbeat: update timestamp only, do not propagate to app
         if event.key_type == KeyType.HEARTBEAT:
+            self._stats.heartbeats_received += 1
             logger.debug("Heartbeat received")
             return
+
+        self._stats.key_events_received += 1
 
         logger.debug(
             "Key event: type=%s, value=%s, press=%s",
@@ -177,6 +203,7 @@ class KeyReceiver:
                     else:
                         should_notify = False
                 if should_notify:
+                    self._stats.disconnections += 1
                     logger.info(
                         "Client disconnected (timeout: %.1fs)", elapsed
                     )

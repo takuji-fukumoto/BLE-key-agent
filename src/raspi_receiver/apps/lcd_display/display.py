@@ -1,12 +1,17 @@
 """LCD display manager for BLE Key Agent.
 
-Manages screen state, composes PIL images, and drives the ST7789 LCD.
-Uses the example LCD HAT driver for SPI communication.
+Manages screen state, composes PIL images, and drives the ST7789 LCD
+via a subprocess-based SPI renderer.
 
 The display is divided into three regions:
 - Title region: app name + connection status
 - Key region: latest key (large font) + modifier info
 - Buffer region: accumulated character input
+
+SPI writes are executed in a separate subprocess to prevent GIL-level
+freezes.  The spidev C extension holds the GIL during blocking ioctl()
+calls; by isolating SPI in its own process, the main process (asyncio,
+bless, watchdog) stays responsive even if SPI hangs.
 
 See docs/spec-raspi-receiver.md section 4 for the screen layout specification.
 """
@@ -16,13 +21,9 @@ from __future__ import annotations
 import gc
 import logging
 import struct
-import sys
 import time
 from dataclasses import dataclass
-from pathlib import Path
-from typing import Any, Optional
-
-import types
+from typing import Optional
 
 from PIL import Image, ImageDraw, ImageFont
 
@@ -31,7 +32,6 @@ from raspi_receiver.apps.lcd_display.config import (
     BACKLIGHT_LEVELS,
     COLORS,
     DISPLAY_HEIGHT,
-    DISPLAY_ROTATION,
     DISPLAY_WIDTH,
     FONT_DEFAULT,
     FONT_SIZE_BUFFER,
@@ -41,7 +41,9 @@ from raspi_receiver.apps.lcd_display.config import (
     FONT_SIZE_TITLE,
     INPUT_BUFFER_MAX_LENGTH,
     LAYOUT,
+    SPI_SPEED_HZ,
 )
+from raspi_receiver.apps.lcd_display.render_process import RenderProxy
 
 logger = logging.getLogger(__name__)
 
@@ -73,23 +75,30 @@ class ScreenState:
 class LCDDisplay:
     """LCD display manager for the 1.3inch LCD HAT.
 
-    Handles hardware initialization, screen composition using PIL,
-    and SPI communication via the ST7789 driver.
+    Handles screen composition using PIL and delegates SPI
+    communication to a subprocess-based renderer.
 
     Args:
         backlight: Initial backlight duty cycle (0-100).
+        spi_speed: SPI bus speed in Hz.
     """
 
-    def __init__(self, backlight: int = BACKLIGHT_DEFAULT) -> None:
+    def __init__(
+        self,
+        backlight: int = BACKLIGHT_DEFAULT,
+        spi_speed: int = SPI_SPEED_HZ,
+    ) -> None:
         self._state = ScreenState()
         self._backlight = backlight
-        self._disp: Any = None  # ST7789 instance, set in init()
+        self._spi_speed = spi_speed
+        self._render_proxy: RenderProxy | None = None
         self._image: Optional[Image.Image] = None
         self._draw: Optional[ImageDraw.ImageDraw] = None
         self._fonts: dict[str, ImageFont.FreeTypeFont] = {}
         self.last_render_time: float = 0.0
-        self._has_numpy: bool = False
-        self._rgb565_buf: bytearray | None = None
+        self._rgb565_buf: bytearray = bytearray(
+            DISPLAY_WIDTH * DISPLAY_HEIGHT * 2
+        )
         self._render_count: int = 0
 
     @property
@@ -100,72 +109,18 @@ class LCDDisplay:
     def init(self) -> None:
         """Initialize LCD hardware and fonts.
 
-        Adds the example driver directory to sys.path, imports ST7789,
-        and runs hardware initialization sequence.
-
-        If numpy is not available, the ST7789 driver's ShowImage method
-        is replaced with a pure-Python RGB565 conversion to avoid the
-        numpy dependency (pip install numpy often fails on ARM/Raspberry Pi).
+        Starts the SPI render subprocess which initializes the ST7789
+        driver, then sets up PIL image and fonts for composition.
 
         Raises:
-            RuntimeError: If hardware initialization fails.
+            RuntimeError: If the render subprocess fails to start.
         """
-        driver_dir = str(
-            Path(__file__).resolve().parents[4]
-            / "example"
-            / "1.3inch_LCD_HAT_python"
-        )
-        if driver_dir not in sys.path:
-            sys.path.insert(0, driver_dir)
+        # Start render subprocess (handles all hardware init)
+        self._render_proxy = RenderProxy(spi_speed=self._spi_speed)
+        self._render_proxy.start()
+        self._render_proxy.set_backlight(self._backlight)
 
-        # --- Workaround: numpy optional ---
-        # config.py does `import numpy as np` at top level.
-        # Inject a stub if numpy is not installed (common on ARM).
-        _has_numpy = "numpy" in sys.modules
-        if not _has_numpy:
-            try:
-                import numpy  # noqa: F401
-                _has_numpy = True
-            except ImportError:
-                _stub = types.ModuleType("numpy")
-                _stub.uint8 = None  # type: ignore[attr-defined]
-                sys.modules["numpy"] = _stub
-                logger.info("numpy not available, using pure-Python RGB565")
-
-        # --- Workaround: PWM fallback ---
-        # config.py uses gpiozero.PWMOutputDevice for backlight.
-        # If no PWM-capable pin factory is available (lgpio/RPi.GPIO/pigpio),
-        # gpiozero raises PinPWMUnsupported. Replace with on/off fallback.
-        _patch_pwm = False
-        try:
-            import gpiozero
-            _test = gpiozero.PWMOutputDevice(24)
-            _test.close()
-        except Exception:
-            _patch_pwm = True
-            import gpiozero
-            gpiozero.PWMOutputDevice = _DigitalBacklightFallback  # type: ignore[attr-defined]
-            logger.warning(
-                "PWM not supported, backlight will be on/off only"
-            )
-
-        import ST7789
-
-        self._disp = ST7789.ST7789()
-
-        self._has_numpy = _has_numpy
-        if not _has_numpy:
-            self._rgb565_buf = bytearray(DISPLAY_WIDTH * DISPLAY_HEIGHT * 2)
-
-        # Restore original PWMOutputDevice if we patched it
-        if _patch_pwm:
-            import gpiozero as _gz
-            _gz.PWMOutputDevice = _OriginalPWM  # type: ignore[attr-defined]
-
-        self._disp.Init()
-        self._disp.clear()
-        self._disp.bl_DutyCycle(self._backlight)
-
+        # Create PIL image for composition
         self._image = Image.new(
             "RGB",
             (DISPLAY_WIDTH, DISPLAY_HEIGHT),
@@ -182,14 +137,18 @@ class LCDDisplay:
         }
 
         logger.info(
-            "LCD display initialized (%dx%d)", DISPLAY_WIDTH, DISPLAY_HEIGHT
+            "LCD display initialized (%dx%d, SPI=%dHz)",
+            DISPLAY_WIDTH,
+            DISPLAY_HEIGHT,
+            self._spi_speed,
         )
 
     def shutdown(self) -> None:
-        """Shutdown LCD hardware and cleanup GPIO resources."""
-        if self._disp is not None:
-            self._disp.bl_DutyCycle(0)
-            self._disp.module_exit()
+        """Shutdown LCD hardware and cleanup resources."""
+        if self._render_proxy is not None:
+            self._render_proxy.set_backlight(0)
+            self._render_proxy.stop()
+            self._render_proxy = None
             logger.info("LCD display shut down")
 
     def set_backlight(self, duty: int) -> None:
@@ -199,8 +158,8 @@ class LCDDisplay:
             duty: Duty cycle percentage (0-100).
         """
         self._backlight = max(0, min(100, duty))
-        if self._disp is not None:
-            self._disp.bl_DutyCycle(self._backlight)
+        if self._render_proxy is not None:
+            self._render_proxy.set_backlight(self._backlight)
 
     def cycle_backlight(self) -> int:
         """Cycle through predefined backlight levels.
@@ -217,6 +176,16 @@ class LCDDisplay:
         new_level = BACKLIGHT_LEVELS[next_idx]
         self.set_backlight(new_level)
         return new_level
+
+    def read_buttons(self) -> tuple[bool, bool]:
+        """Read physical button states via render subprocess.
+
+        Returns:
+            Tuple of (key1_pressed, key2_pressed).
+        """
+        if self._render_proxy is None:
+            return False, False
+        return self._render_proxy.read_buttons()
 
     # --- State update methods ---
 
@@ -272,6 +241,9 @@ class LCDDisplay:
     def render(self) -> bool:
         """Compose and display the current screen state.
 
+        PIL composition happens in the main process.  The resulting
+        RGB565 buffer is sent to the render subprocess for SPI write.
+
         Returns:
             True if the screen was actually re-drawn, False if skipped.
         """
@@ -290,13 +262,17 @@ class LCDDisplay:
         self._draw_separator(LAYOUT.SEP2_Y)
         self._draw_buffer_region()
 
-        # Rotate and send to display
+        # Rotate for correct LCD orientation
         rotated = self._image.transpose(Image.Transpose.ROTATE_270)
-        if self._has_numpy:
-            self._disp.ShowImage(rotated)
-        else:
-            _show_image_rgb565(self._disp, rotated, self._rgb565_buf)
+
+        # Convert to RGB565 and send to subprocess for SPI write
+        _convert_to_rgb565(rotated, self._rgb565_buf)
         del rotated  # Free 172KB PIL Image immediately
+
+        if self._render_proxy is not None:
+            self._render_proxy.render(
+                self._rgb565_buf, DISPLAY_WIDTH, DISPLAY_HEIGHT
+            )
 
         self._state.mark_clean()
         self.last_render_time = time.monotonic()
@@ -432,95 +408,38 @@ class LCDDisplay:
         return key_value
 
 
-# --- PWM fallback for environments without lgpio/RPi.GPIO/pigpio ---
-# gpiozero's NativeFactory doesn't support PWM. When no PWM-capable pin
-# factory is available, we temporarily swap PWMOutputDevice with this
-# DigitalOutputDevice wrapper so that ST7789() construction succeeds.
-# Backlight becomes simple on/off (no dimming) but the app still works.
+def _convert_to_rgb565(
+    image: Image.Image, buf: bytearray | None = None
+) -> bytearray:
+    """Convert RGB888 PIL Image to RGB565 bytearray.
 
-_OriginalPWM: Any = None  # Saved before patching, restored after
-
-try:
-    import gpiozero as _gz
-
-    _OriginalPWM = _gz.PWMOutputDevice
-except Exception:
-    pass
-
-
-class _DigitalBacklightFallback:
-    """Drop-in replacement for PWMOutputDevice using on/off only."""
-
-    def __init__(self, pin: int, frequency: int = 1000, **kwargs: Any) -> None:
-        from gpiozero import DigitalOutputDevice
-
-        self._device = DigitalOutputDevice(pin)
-        self._value = 0.0
-
-    @property
-    def value(self) -> float:
-        return self._value
-
-    @value.setter
-    def value(self, v: float) -> None:
-        self._value = float(v)
-        if v > 0:
-            self._device.on()
-        else:
-            self._device.off()
-
-    @property
-    def frequency(self) -> int:
-        return 1000
-
-    @frequency.setter
-    def frequency(self, f: int) -> None:
-        pass  # no-op
-
-    def close(self) -> None:
-        self._device.close()
-
-
-def _show_image_rgb565(
-    disp: Any, image: Image.Image, buf: bytearray | None = None
-) -> None:
-    """Pure-Python ShowImage replacement (no numpy required).
-
-    Converts an RGB888 PIL Image to RGB565 and sends it to the
-    ST7789 LCD via SPI. Uses struct.pack_into for in-place buffer
-    writes and passes bytearray slices directly to SPI (no list copy).
+    Uses struct.pack_into for in-place buffer writes to minimize
+    memory allocations.
 
     Args:
-        disp: ST7789 driver instance.
-        image: PIL Image in RGB mode, must match display dimensions.
-        buf: Optional pre-allocated bytearray for RGB565 output.
-             If None, a new buffer is created each call.
-    """
-    imwidth, imheight = image.size
-    if imwidth != disp.width or imheight != disp.height:
-        raise ValueError(
-            f"Image must be {disp.width}x{disp.height}, "
-            f"got {imwidth}x{imheight}"
-        )
+        image: PIL Image in RGB mode.
+        buf: Optional pre-allocated bytearray for output.
+             If None, a new buffer is created.
 
+    Returns:
+        Bytearray containing RGB565 pixel data.
+    """
     if image.mode != "RGB":
         image = image.convert("RGB")
 
     pixels = image.tobytes()
-    num_pixels = disp.width * disp.height
+    num_pixels = image.size[0] * image.size[1]
     pix = buf if buf is not None else bytearray(num_pixels * 2)
 
     for i in range(num_pixels):
         off = i * 3
         r, g, b = pixels[off], pixels[off + 1], pixels[off + 2]
         struct.pack_into(
-            ">H", pix, i * 2,
+            ">H",
+            pix,
+            i * 2,
             ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3),
         )
 
     del pixels  # Free 172KB tobytes() result immediately
-
-    disp.SetWindows(0, 0, disp.width, disp.height)
-    disp.digital_write(disp.GPIO_DC_PIN, True)
-    for i in range(0, len(pix), 4096):
-        disp.spi_writebyte(pix[i:i + 4096])
+    return pix
