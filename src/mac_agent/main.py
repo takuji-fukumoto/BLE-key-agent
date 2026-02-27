@@ -25,7 +25,7 @@ import signal
 import sys
 import time
 
-from mac_agent.ble_client import BleClient, STATUS_CONNECTED
+from mac_agent.ble_client import BleClient, BleStatus
 from mac_agent.key_monitor import KeyMonitor
 from common.protocol import KeyEvent
 
@@ -62,7 +62,7 @@ class MacAgent:
         self._shutdown_event = asyncio.Event()
         self._last_send_time: float = 0.0
 
-    def _on_ble_status_change(self, status: str) -> None:
+    def _on_ble_status_change(self, status: BleStatus) -> None:
         """Handle BLE connection status changes."""
         logger.info("BLE status: %s", status)
 
@@ -78,7 +78,7 @@ class MacAgent:
             # Scan and connect to BLE device
             await self._connect()
 
-            if self._ble_client.status != STATUS_CONNECTED:
+            if self._ble_client.status != BleStatus.CONNECTED:
                 logger.error("Failed to connect to BLE device")
                 return
 
@@ -168,7 +168,7 @@ class MacAgent:
                 await asyncio.sleep(MIN_SEND_INTERVAL_S - elapsed)
 
             # Send via BLE
-            if self._ble_client.status == STATUS_CONNECTED:
+            if self._ble_client.status == BleStatus.CONNECTED:
                 await self._ble_client.send_key(event)
                 self._last_send_time = time.monotonic()
                 # Log key press only
@@ -189,7 +189,7 @@ class MacAgent:
             elapsed = time.monotonic() - self._last_send_time
             if elapsed < HEARTBEAT_INTERVAL_SEC:
                 continue
-            if self._ble_client.status == STATUS_CONNECTED:
+            if self._ble_client.status == BleStatus.CONNECTED:
                 await self._ble_client.send_key(KeyEvent.heartbeat())
                 self._last_send_time = time.monotonic()
                 logger.debug("Heartbeat sent")

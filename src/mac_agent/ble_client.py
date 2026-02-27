@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass
+from enum import Enum
 from typing import TYPE_CHECKING, Callable, Optional
 
 from common.protocol import KeyEvent
@@ -21,12 +22,22 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# Connection status constants (per spec-mac-agent.md §3)
-STATUS_DISCONNECTED = "DISCONNECTED"
-STATUS_SCANNING = "SCANNING"
-STATUS_CONNECTING = "CONNECTING"
-STATUS_CONNECTED = "CONNECTED"
-STATUS_RECONNECTING = "RECONNECTING"
+class BleStatus(Enum):
+    """BLE connection status (per spec-mac-agent.md §3)."""
+
+    DISCONNECTED = "DISCONNECTED"
+    SCANNING = "SCANNING"
+    CONNECTING = "CONNECTING"
+    CONNECTED = "CONNECTED"
+    RECONNECTING = "RECONNECTING"
+
+
+# Backward-compatible aliases
+STATUS_DISCONNECTED = BleStatus.DISCONNECTED
+STATUS_SCANNING = BleStatus.SCANNING
+STATUS_CONNECTING = BleStatus.CONNECTING
+STATUS_CONNECTED = BleStatus.CONNECTED
+STATUS_RECONNECTING = BleStatus.RECONNECTING
 
 
 @dataclass
@@ -68,7 +79,9 @@ class BleClient:
         ...     await client.disconnect()
     """
 
-    def __init__(self, on_status_change: Callable[[str], None]) -> None:
+    def __init__(
+        self, on_status_change: Callable[[BleStatus], None] | None = None,
+    ) -> None:
         """Initialize BleClient.
 
         Args:
@@ -82,7 +95,7 @@ class BleClient:
         self._last_address: Optional[str] = None
 
     @property
-    def status(self) -> str:
+    def status(self) -> BleStatus:
         """Return current connection status."""
         return self._status
 
@@ -286,11 +299,11 @@ class BleClient:
         )
         return False
 
-    def _set_status(self, new_status: str) -> None:
+    def _set_status(self, new_status: BleStatus) -> None:
         """Update status and notify callback with exception isolation.
 
         Args:
-            new_status: New status string.
+            new_status: New connection status.
         """
         old_status = self._status
         self._status = new_status
