@@ -37,6 +37,10 @@ logger = logging.getLogger(__name__)
 # Health check interval in seconds
 HEALTH_CHECK_INTERVAL_SEC: float = 30.0
 
+# Auto-exit delay when running in no-render fallback mode (seconds).
+# The loop script will restart the process and retry display init.
+NO_RENDER_FALLBACK_EXIT_SEC: float = 60.0
+
 
 # --- Internal event types for the async queue ---
 
@@ -75,6 +79,7 @@ class LCDApp:
     ) -> None:
         self._receiver = KeyReceiver()
         self._no_render = no_render
+        self._fell_back_to_no_render = False
         self._display: LCDDisplay | None = (
             None if no_render else LCDDisplay(spi_speed=spi_speed)
         )
@@ -92,9 +97,37 @@ class LCDApp:
         self._loop = asyncio.get_running_loop()
 
         # Initialize LCD hardware (skip in no-render mode)
+        # Retry up to 10 times with increasing delay — after a crash the
+        # SPI/GPIO hardware may need time to recover.
         if self._display is not None:
-            self._display.init()
-            self._display.render()  # Draw initial "Waiting..." screen
+            max_retries = 10
+            for attempt in range(1, max_retries + 1):
+                try:
+                    self._display.init()
+                    self._display.render()  # Draw initial "Waiting..." screen
+                    break
+                except Exception:
+                    if attempt < max_retries:
+                        delay = min(attempt * 2, 10)  # 2,4,6,8,10,10,...s
+                        logger.warning(
+                            "LCD init failed (attempt %d/%d), "
+                            "retrying in %ds...",
+                            attempt,
+                            max_retries,
+                            delay,
+                            exc_info=True,
+                        )
+                        await asyncio.sleep(delay)
+                    else:
+                        logger.warning(
+                            "LCD init failed after %d attempts, "
+                            "falling back to no-render mode",
+                            max_retries,
+                            exc_info=True,
+                        )
+                        self._display = None
+                        self._no_render = True
+                        self._fell_back_to_no_render = True
 
         # Register KeyReceiver callbacks
         self._receiver.on_key_press = self._on_key_press
@@ -125,6 +158,15 @@ class LCDApp:
                     self._no_render_drain_loop(), name="no_render_drain"
                 )
             )
+            # If we fell back to no-render due to display init failure,
+            # schedule an auto-exit so the loop script can restart us
+            # with a fresh hardware reset and retry display init.
+            if self._fell_back_to_no_render:
+                tasks.append(
+                    asyncio.create_task(
+                        self._fallback_exit_timer(), name="fallback_exit"
+                    )
+                )
         else:
             tasks.append(
                 asyncio.create_task(self._render_loop(), name="render_loop")
@@ -461,6 +503,29 @@ class LCDApp:
             except Exception:
                 logger.exception("Error in button poll loop")
                 await asyncio.sleep(interval)
+
+    async def _fallback_exit_timer(self) -> None:
+        """Auto-exit after running in no-render fallback mode.
+
+        When display init failed and the app fell back to no-render mode,
+        this timer triggers a graceful shutdown so the loop script can
+        restart the process with a fresh hardware reset and retry display
+        initialisation.
+        """
+        try:
+            logger.info(
+                "No-render fallback: will auto-exit in %.0fs "
+                "for display recovery restart",
+                NO_RENDER_FALLBACK_EXIT_SEC,
+            )
+            await asyncio.sleep(NO_RENDER_FALLBACK_EXIT_SEC)
+            logger.info(
+                "No-render fallback timeout reached, "
+                "shutting down for restart..."
+            )
+            self._shutdown_event.set()
+        except asyncio.CancelledError:
+            pass
 
     async def _health_check_loop(self) -> None:
         """Periodically log system health for diagnostics.

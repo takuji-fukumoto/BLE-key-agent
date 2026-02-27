@@ -106,10 +106,34 @@ while true; do
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] ${RESTART_DELAY}秒後に再起動します..."
     sleep "$RESTART_DELAY"
 
+    # SPI/GPIO デバイスのリセット (クラッシュ後の不正状態を解消)
+    if [ -e /dev/spidev0.0 ]; then
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] SPI デバイスをリセット中..."
+        # spidev を unbind → rebind してハードウェア状態をクリア
+        for spi_dev in /sys/bus/spi/drivers/spidev/spi*; do
+            if [ -e "$spi_dev" ]; then
+                dev_name=$(basename "$spi_dev")
+                echo "$dev_name" | sudo tee /sys/bus/spi/drivers/spidev/unbind 2>/dev/null || true
+                sleep 0.5
+                echo "$dev_name" | sudo tee /sys/bus/spi/drivers/spidev/bind 2>/dev/null || true
+            fi
+        done
+        sleep 1
+    fi
+
+    # GPIO ピンを解放 (gpiozero のロック解除)
+    if [ -d /sys/class/gpio ]; then
+        for pin in 24 25; do
+            if [ -e "/sys/class/gpio/gpio${pin}" ]; then
+                echo "$pin" | sudo tee /sys/class/gpio/unexport 2>/dev/null || true
+            fi
+        done
+    fi
+
     # bluetooth デーモンを再起動 (クリーンな状態にする)
     if command -v systemctl &>/dev/null; then
         echo "[$(date '+%Y-%m-%d %H:%M:%S')] bluetooth サービスを再起動中..."
-        sudo systemctl restart bluetooth
+        sudo systemctl restart bluetooth || true
         sleep 2
     fi
 done
