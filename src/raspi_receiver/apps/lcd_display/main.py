@@ -226,11 +226,11 @@ class LCDApp:
         )
         self._enqueue(display_event)
 
-    def _on_connect(self, event: ConnectionEvent) -> None:
+    def _on_connect(self, _event: ConnectionEvent) -> None:
         """Handle BLE connection (sync callback)."""
         self._enqueue(DisplayConnectionEvent(connected=True))
 
-    def _on_disconnect(self, event: ConnectionEvent) -> None:
+    def _on_disconnect(self, _event: ConnectionEvent) -> None:
         """Handle BLE disconnection (sync callback)."""
         self._enqueue(DisplayConnectionEvent(connected=False))
 

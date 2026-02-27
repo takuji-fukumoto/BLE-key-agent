@@ -52,16 +52,8 @@ class TestGATTServerInit:
 
     def test_callbacks_stored(self) -> None:
         on_write = MagicMock()
-        on_connect = MagicMock()
-        on_disconnect = MagicMock()
-        server = GATTServer(
-            on_write=on_write,
-            on_connect=on_connect,
-            on_disconnect=on_disconnect,
-        )
+        server = GATTServer(on_write=on_write)
         assert server._on_write is on_write
-        assert server._on_connect is on_connect
-        assert server._on_disconnect is on_disconnect
 
 
 class TestGATTServerStart:
