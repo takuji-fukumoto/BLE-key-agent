@@ -68,9 +68,16 @@ class LCDApp:
     manages physical button input, and controls the application lifecycle.
     """
 
-    def __init__(self, spi_speed: int = SPI_SPEED_HZ) -> None:
+    def __init__(
+        self,
+        spi_speed: int = SPI_SPEED_HZ,
+        no_render: bool = False,
+    ) -> None:
         self._receiver = KeyReceiver()
-        self._display = LCDDisplay(spi_speed=spi_speed)
+        self._no_render = no_render
+        self._display: LCDDisplay | None = (
+            None if no_render else LCDDisplay(spi_speed=spi_speed)
+        )
         self._event_queue: asyncio.Queue[DisplayEvent] = asyncio.Queue(
             maxsize=EVENT_QUEUE_MAX_SIZE
         )
@@ -84,9 +91,10 @@ class LCDApp:
         """Start the application and run until shutdown signal."""
         self._loop = asyncio.get_running_loop()
 
-        # Initialize LCD hardware
-        self._display.init()
-        self._display.render()  # Draw initial "Waiting..." screen
+        # Initialize LCD hardware (skip in no-render mode)
+        if self._display is not None:
+            self._display.init()
+            self._display.render()  # Draw initial "Waiting..." screen
 
         # Register KeyReceiver callbacks
         self._receiver.on_key_press = self._on_key_press
@@ -109,12 +117,31 @@ class LCDApp:
 
         # Run concurrent tasks
         tasks = [
-            asyncio.create_task(self._render_loop(), name="render_loop"),
-            asyncio.create_task(self._button_poll_loop(), name="button_poll"),
             asyncio.create_task(self._health_check_loop(), name="health_check"),
         ]
+        if self._no_render:
+            tasks.append(
+                asyncio.create_task(
+                    self._no_render_drain_loop(), name="no_render_drain"
+                )
+            )
+        else:
+            tasks.append(
+                asyncio.create_task(self._render_loop(), name="render_loop")
+            )
+            tasks.append(
+                asyncio.create_task(
+                    self._button_poll_loop(), name="button_poll"
+                )
+            )
 
-        logger.info("LCD app started, waiting for BLE connections...")
+        if self._no_render:
+            logger.info(
+                "LCD app started (NO-RENDER mode), "
+                "waiting for BLE connections..."
+            )
+        else:
+            logger.info("LCD app started, waiting for BLE connections...")
 
         # Wait for shutdown
         await self._shutdown_event.wait()
@@ -125,7 +152,8 @@ class LCDApp:
         await asyncio.gather(*tasks, return_exceptions=True)
 
         await self._receiver.stop()
-        self._display.shutdown()
+        if self._display is not None:
+            self._display.shutdown()
 
         logger.info("LCD app shut down")
 
@@ -188,6 +216,38 @@ class LCDApp:
             logger.debug("Event queue full, dropping key event")
 
     # --- Async tasks ---
+
+    async def _no_render_drain_loop(self) -> None:
+        """Drain event queue and log events (no-render mode).
+
+        Replaces the render loop when --no-render is active.
+        Consumes events from the queue and logs them without
+        any LCD or SPI operations.
+        """
+        while not self._shutdown_event.is_set():
+            try:
+                try:
+                    event = await asyncio.wait_for(
+                        self._event_queue.get(), timeout=0.5
+                    )
+                except asyncio.TimeoutError:
+                    continue
+
+                self._process_event(event)
+
+                # Drain additional queued events
+                while not self._event_queue.empty():
+                    try:
+                        event = self._event_queue.get_nowait()
+                        self._process_event(event)
+                    except asyncio.QueueEmpty:
+                        break
+
+            except asyncio.CancelledError:
+                break
+            except Exception:
+                logger.exception("Error in no-render drain loop")
+                await asyncio.sleep(0.1)
 
     async def _render_loop(self) -> None:
         """Process display events and render to LCD.
@@ -273,13 +333,28 @@ class LCDApp:
     def _process_event(self, event: DisplayEvent) -> None:
         """Update display state from a queued event."""
         if isinstance(event, DisplayConnectionEvent):
-            self._display.update_connection(event.connected)
+            if self._display is not None:
+                self._display.update_connection(event.connected)
+            if self._no_render:
+                logger.info(
+                    "[NO-RENDER] connection: %s",
+                    "connected" if event.connected else "disconnected",
+                )
 
         elif isinstance(event, DisplayKeyEvent):
             if not event.press:
                 return  # Only update display on key press
 
+            if self._no_render:
+                logger.info(
+                    "[NO-RENDER] key: type=%s value=%s",
+                    event.key_type,
+                    event.key_value,
+                )
+                return
+
             # Update key display
+            assert self._display is not None
             modifier_text = self._format_modifiers(
                 event.key_value, event.modifiers
             )
@@ -537,12 +612,17 @@ def main() -> None:
         default=SPI_SPEED_HZ,
         help=f"SPI bus speed in Hz (default: {SPI_SPEED_HZ})",
     )
+    parser.add_argument(
+        "--no-render",
+        action="store_true",
+        help="Disable LCD rendering (BLE + logging only, for diagnostics)",
+    )
     args = parser.parse_args()
 
     log_file = _setup_logging(debug=args.debug, log_dir=args.log_dir)
     logger.info("Log file: %s", log_file)
 
-    app = LCDApp(spi_speed=args.spi_speed)
+    app = LCDApp(spi_speed=args.spi_speed, no_render=args.no_render)
     try:
         asyncio.run(app.run())
     except KeyboardInterrupt:
