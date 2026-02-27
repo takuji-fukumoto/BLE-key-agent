@@ -319,7 +319,10 @@ class BleClient:
 
         # Start reconnection if we have a last address
         if self._last_address is not None:
-            loop = asyncio.get_event_loop()
+            if self._reconnect_task and not self._reconnect_task.done():
+                logger.debug("Reconnect task already running, skipping")
+                return
+            loop = asyncio.get_running_loop()
             self._reconnect_task = loop.create_task(
                 self._reconnect_loop()
             )
