@@ -3,14 +3,22 @@
 # Raspberry Pi LCD アプリ 自動再起動ラッパー
 #
 # クラッシュ時に自動で再起動する。Ctrl+C で完全停止。
+# SSH切断(SIGHUP)では停止しない。
 #
 # 使用方法:
 #   ./scripts/run_raspi_loop.sh [--debug] [--log-dir DIR] [--spi-speed HZ]
+#
+# バックグラウンド実行 (推奨):
+#   nohup ./scripts/run_raspi_loop.sh --debug > /tmp/ble-key-agent/loop.log 2>&1 &
 #
 # 環境変数:
 #   RESTART_DELAY  再起動までの待機秒数 (デフォルト: 3)
 #   MAX_RESTARTS   最大連続再起動回数 (デフォルト: 50)
 #
+
+# SIGHUP を無視 — SSH切断でスクリプトとPythonプロセスが
+# 道連れで死ぬのを防ぐ (trap '' は子プロセスにも継承される)
+trap '' HUP
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -40,6 +48,17 @@ for arg in "$@"; do
     prev_arg="$arg"
 done
 
+# ループスクリプト自身のログもファイルに記録
+# (SSH切断後もloop.logでスクリプトの動作状況を確認可能)
+mkdir -p "$LOG_DIR"
+LOOP_LOG="$LOG_DIR/loop.log"
+
+log_msg() {
+    local msg="[$(date '+%Y-%m-%d %H:%M:%S')] $1"
+    echo "$msg"
+    echo "$msg" >> "$LOOP_LOG"
+}
+
 echo "=========================================="
 echo "BLE Key Agent - Raspberry Pi LCD App"
 echo "  (auto-restart mode)"
@@ -47,12 +66,16 @@ echo "=========================================="
 echo ""
 echo "Python: $PYTHON ($VENV_LABEL)"
 echo "ログ出力: $LOG_DIR/raspi_receiver.log"
+echo "ループログ: $LOOP_LOG"
 echo "クラッシュログ: $LOG_DIR/crash.log"
 echo "再起動間隔: ${RESTART_DELAY}s / 最大連続再起動: ${MAX_RESTARTS}"
 echo ""
 echo "終了するには Ctrl+C を押してください"
+echo "(SSH切断では停止しません)"
 echo "=========================================="
 echo ""
+
+log_msg "Loop script started (PID=$$)"
 
 restart_count=0
 user_interrupted=false
@@ -60,15 +83,14 @@ user_interrupted=false
 trap 'user_interrupted=true' INT TERM
 
 while true; do
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] アプリを起動します (restart #${restart_count})..."
+    log_msg "アプリを起動します (restart #${restart_count})..."
 
     PYTHONPATH=src "$PYTHON" -m raspi_receiver.apps.lcd_display.main "$@"
     exit_code=$?
 
     # Ctrl+C による終了
     if $user_interrupted; then
-        echo ""
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] ユーザーにより停止しました"
+        log_msg "ユーザーにより停止しました"
         exit 0
     fi
 
@@ -82,13 +104,11 @@ while true; do
         exit_reason="exit code: ${exit_code}"
     fi
 
-    timestamp="$(date '+%Y-%m-%d %H:%M:%S')"
-    echo ""
-    echo "[${timestamp}] プロセスが終了しました (${exit_reason})"
+    log_msg "プロセスが終了しました (${exit_reason})"
 
     # 再起動ログをファイルに記録
     mkdir -p "$LOG_DIR"
-    echo "${timestamp} RESTART #${restart_count}: ${exit_reason}" >> "$LOG_DIR/restart.log"
+    echo "$(date '+%Y-%m-%d %H:%M:%S') RESTART #${restart_count}: ${exit_reason}" >> "$LOG_DIR/restart.log"
 
     # crash.log があれば表示
     if [ -f "$LOG_DIR/crash.log" ]; then
@@ -99,16 +119,16 @@ while true; do
 
     # 最大再起動回数チェック
     if [ "$restart_count" -ge "$MAX_RESTARTS" ]; then
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] 最大再起動回数 (${MAX_RESTARTS}) に達しました。停止します。"
+        log_msg "最大再起動回数 (${MAX_RESTARTS}) に達しました。停止します。"
         exit 1
     fi
 
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ${RESTART_DELAY}秒後に再起動します..."
+    log_msg "${RESTART_DELAY}秒後に再起動します..."
     sleep "$RESTART_DELAY"
 
     # SPI/GPIO デバイスのリセット (クラッシュ後の不正状態を解消)
     if [ -e /dev/spidev0.0 ]; then
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] SPI デバイスをリセット中..."
+        log_msg "SPI デバイスをリセット中..."
         # spidev を unbind → rebind してハードウェア状態をクリア
         for spi_dev in /sys/bus/spi/drivers/spidev/spi*; do
             if [ -e "$spi_dev" ]; then
@@ -132,7 +152,7 @@ while true; do
 
     # bluetooth デーモンを再起動 (クリーンな状態にする)
     if command -v systemctl &>/dev/null; then
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] bluetooth サービスを再起動中..."
+        log_msg "bluetooth サービスを再起動中..."
         sudo systemctl restart bluetooth || true
         sleep 2
     fi
