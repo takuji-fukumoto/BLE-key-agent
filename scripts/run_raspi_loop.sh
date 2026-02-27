@@ -12,8 +12,6 @@
 #   MAX_RESTARTS   最大連続再起動回数 (デフォルト: 50)
 #
 
-set -e
-
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
@@ -64,11 +62,8 @@ trap 'user_interrupted=true' INT TERM
 while true; do
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] アプリを起動します (restart #${restart_count})..."
 
-    # set +e で終了コードを取得
-    set +e
     PYTHONPATH=src "$PYTHON" -m raspi_receiver.apps.lcd_display.main "$@"
     exit_code=$?
-    set -e
 
     # Ctrl+C による終了
     if $user_interrupted; then
@@ -79,8 +74,21 @@ while true; do
 
     restart_count=$((restart_count + 1))
 
+    # exit code の解釈
+    if [ "$exit_code" -gt 128 ]; then
+        signal_num=$((exit_code - 128))
+        exit_reason="exit code: ${exit_code} (killed by signal ${signal_num})"
+    else
+        exit_reason="exit code: ${exit_code}"
+    fi
+
+    timestamp="$(date '+%Y-%m-%d %H:%M:%S')"
     echo ""
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] プロセスが終了しました (exit code: ${exit_code})"
+    echo "[${timestamp}] プロセスが終了しました (${exit_reason})"
+
+    # 再起動ログをファイルに記録
+    mkdir -p "$LOG_DIR"
+    echo "${timestamp} RESTART #${restart_count}: ${exit_reason}" >> "$LOG_DIR/restart.log"
 
     # crash.log があれば表示
     if [ -f "$LOG_DIR/crash.log" ]; then
