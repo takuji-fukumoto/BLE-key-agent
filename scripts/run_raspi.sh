@@ -5,11 +5,12 @@
 # BLE で Mac からのキー入力を受信し、LCD に表示する
 #
 # 使用方法:
-#   ./scripts/run_raspi.sh [--debug] [--log-dir DIR]
+#   ./scripts/run_raspi.sh [--debug] [--log-dir DIR] [--spi-speed HZ]
 #
 # オプション:
-#   --debug     DEBUG レベルのログをコンソールに出力
-#   --log-dir   ログファイルの出力先ディレクトリ (デフォルト: logs/)
+#   --debug       DEBUG レベルのログをコンソールに出力
+#   --log-dir     ログファイルの出力先ディレクトリ (デフォルト: logs/)
+#   --spi-speed   SPI バス速度 (Hz, デフォルト: 20000000)
 #
 # ※ 事前に setup_raspi.sh で権限設定済みであること
 #   （BLE ケーパビリティ + bluetooth/spi/gpio グループ）

@@ -28,6 +28,7 @@ from raspi_receiver.apps.lcd_display.config import (
     BUTTON_POLL_INTERVAL_MS,
     EVENT_QUEUE_MAX_SIZE,
     RENDER_MIN_INTERVAL_MS,
+    SPI_SPEED_HZ,
 )
 from raspi_receiver.apps.lcd_display.display import LCDDisplay
 
@@ -67,9 +68,9 @@ class LCDApp:
     manages physical button input, and controls the application lifecycle.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, spi_speed: int = SPI_SPEED_HZ) -> None:
         self._receiver = KeyReceiver()
-        self._display = LCDDisplay()
+        self._display = LCDDisplay(spi_speed=spi_speed)
         self._event_queue: asyncio.Queue[DisplayEvent] = asyncio.Queue(
             maxsize=EVENT_QUEUE_MAX_SIZE
         )
@@ -330,6 +331,9 @@ class LCDApp:
 
         KEY1: Clear input buffer
         KEY2: Cycle backlight brightness
+
+        Button states are read via the render subprocess to avoid
+        opening GPIO pins in the main process.
         """
         interval = BUTTON_POLL_INTERVAL_MS / 1000.0
         loop = asyncio.get_running_loop()
@@ -340,21 +344,9 @@ class LCDApp:
 
         while not self._shutdown_event.is_set():
             try:
-                disp = self._display._disp
-                if disp is None:
-                    await asyncio.sleep(interval)
-                    continue
-
-                # Read button states (active low: 0 = pressed)
-                # Offload blocking GPIO reads to thread pool.
-                def _read_buttons() -> tuple[bool, bool]:
-                    return (
-                        disp.digital_read(disp.GPIO_KEY1_PIN) == 0,
-                        disp.digital_read(disp.GPIO_KEY2_PIN) == 0,
-                    )
-
+                # Read button states via render subprocess
                 key1_pressed, key2_pressed = await loop.run_in_executor(
-                    None, _read_buttons
+                    None, self._display.read_buttons
                 )
 
                 # KEY1: clear buffer (on press edge)
@@ -539,12 +531,18 @@ def main() -> None:
         default="logs",
         help="Directory for log files (default: logs/)",
     )
+    parser.add_argument(
+        "--spi-speed",
+        type=int,
+        default=SPI_SPEED_HZ,
+        help=f"SPI bus speed in Hz (default: {SPI_SPEED_HZ})",
+    )
     args = parser.parse_args()
 
     log_file = _setup_logging(debug=args.debug, log_dir=args.log_dir)
     logger.info("Log file: %s", log_file)
 
-    app = LCDApp()
+    app = LCDApp(spi_speed=args.spi_speed)
     try:
         asyncio.run(app.run())
     except KeyboardInterrupt:
