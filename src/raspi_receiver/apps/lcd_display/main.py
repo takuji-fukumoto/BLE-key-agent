@@ -8,12 +8,16 @@ Run with: python -m raspi_receiver.apps.lcd_display.main
 
 from __future__ import annotations
 
+import argparse
 import asyncio
 import gc
 import logging
+import os
+import resource
 import signal
 import time
 from dataclasses import dataclass
+from logging.handlers import RotatingFileHandler
 from typing import Union
 
 from common.protocol import KeyEvent, KeyType, Modifiers
@@ -27,6 +31,9 @@ from raspi_receiver.apps.lcd_display.config import (
 from raspi_receiver.apps.lcd_display.display import LCDDisplay
 
 logger = logging.getLogger(__name__)
+
+# Health check interval in seconds
+HEALTH_CHECK_INTERVAL_SEC: float = 30.0
 
 
 # --- Internal event types for the async queue ---
@@ -94,6 +101,7 @@ class LCDApp:
         tasks = [
             asyncio.create_task(self._render_loop(), name="render_loop"),
             asyncio.create_task(self._button_poll_loop(), name="button_poll"),
+            asyncio.create_task(self._health_check_loop(), name="health_check"),
         ]
 
         logger.info("LCD app started, waiting for BLE connections...")
@@ -362,18 +370,109 @@ class LCDApp:
                 logger.exception("Error in button poll loop")
                 await asyncio.sleep(interval)
 
+    async def _health_check_loop(self) -> None:
+        """Periodically log system health for diagnostics.
+
+        Logs BLE connection state, receiver statistics, event queue depth,
+        memory usage (RSS), and asyncio task count every 30 seconds.
+        """
+        while not self._shutdown_event.is_set():
+            try:
+                await asyncio.sleep(HEALTH_CHECK_INTERVAL_SEC)
+                if self._shutdown_event.is_set():
+                    break
+
+                stats = self._receiver.stats
+                queue_size = self._event_queue.qsize()
+                rss_mb = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+                # macOS reports in bytes, Linux in KB
+                if hasattr(os, "uname") and os.uname().sysname == "Darwin":
+                    rss_mb = rss_mb / (1024 * 1024)
+                else:
+                    rss_mb = rss_mb / 1024
+                task_count = len(asyncio.all_tasks())
+
+                logger.info(
+                    "[HEALTH] connected=%s | keys=%d hb=%d errs=%d "
+                    "conn=%d disconn=%d | queue=%d/%d | "
+                    "RSS=%.1fMB | tasks=%d",
+                    self._receiver.is_connected,
+                    stats.key_events_received,
+                    stats.heartbeats_received,
+                    stats.deserialize_errors,
+                    stats.connections,
+                    stats.disconnections,
+                    queue_size,
+                    EVENT_QUEUE_MAX_SIZE,
+                    rss_mb,
+                    task_count,
+                )
+
+            except asyncio.CancelledError:
+                break
+            except Exception:
+                logger.exception("Error in health check loop")
+
     def _signal_shutdown(self) -> None:
         """Handle shutdown signal."""
         logger.info("Shutdown signal received")
         self._shutdown_event.set()
 
 
+def _setup_logging(debug: bool, log_dir: str) -> str:
+    """Configure logging with console and file handlers.
+
+    Args:
+        debug: If True, set console log level to DEBUG.
+        log_dir: Directory for log files.
+
+    Returns:
+        Path to the log file.
+    """
+    log_format = "%(asctime)s [%(name)s] %(levelname)s: %(message)s"
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.DEBUG)
+
+    # Console handler
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.DEBUG if debug else logging.INFO)
+    console_handler.setFormatter(logging.Formatter(log_format))
+    root_logger.addHandler(console_handler)
+
+    # File handler (always DEBUG level)
+    os.makedirs(log_dir, exist_ok=True)
+    log_file = os.path.join(log_dir, "raspi_receiver.log")
+    file_handler = RotatingFileHandler(
+        log_file,
+        maxBytes=5 * 1024 * 1024,  # 5MB
+        backupCount=3,
+    )
+    file_handler.setLevel(logging.DEBUG)
+    file_handler.setFormatter(logging.Formatter(log_format))
+    root_logger.addHandler(file_handler)
+
+    return log_file
+
+
 def main() -> None:
     """Application entry point."""
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
+    parser = argparse.ArgumentParser(
+        description="BLE Key Agent - Raspberry Pi LCD App",
     )
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Enable DEBUG level logging on console",
+    )
+    parser.add_argument(
+        "--log-dir",
+        default="logs",
+        help="Directory for log files (default: logs/)",
+    )
+    args = parser.parse_args()
+
+    log_file = _setup_logging(debug=args.debug, log_dir=args.log_dir)
+    logger.info("Log file: %s", log_file)
 
     app = LCDApp()
     try:
