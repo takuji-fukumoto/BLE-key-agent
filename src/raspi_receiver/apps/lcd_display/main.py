@@ -92,50 +92,58 @@ class LCDApp:
         self._render_start_time: float = 0.0
         self._loop_responsive = False
 
-    async def run(self) -> None:
-        """Start the application and run until shutdown signal."""
-        self._loop = asyncio.get_running_loop()
+    async def _init_lcd(self) -> None:
+        """Initialize LCD hardware with retry.
 
-        # Initialize LCD hardware (skip in no-render mode)
-        # Retry up to 10 times with increasing delay — after a crash the
-        # SPI/GPIO hardware may need time to recover.
-        if self._display is not None:
-            max_retries = 10
-            for attempt in range(1, max_retries + 1):
-                try:
-                    self._display.init()
-                    self._display.render()  # Draw initial "Waiting..." screen
-                    break
-                except Exception:
-                    if attempt < max_retries:
-                        delay = min(attempt * 2, 10)  # 2,4,6,8,10,10,...s
-                        logger.warning(
-                            "LCD init failed (attempt %d/%d), "
-                            "retrying in %ds...",
-                            attempt,
-                            max_retries,
-                            delay,
-                            exc_info=True,
-                        )
-                        await asyncio.sleep(delay)
-                    else:
-                        logger.warning(
-                            "LCD init failed after %d attempts, "
-                            "falling back to no-render mode",
-                            max_retries,
-                            exc_info=True,
-                        )
-                        self._display = None
-                        self._no_render = True
-                        self._fell_back_to_no_render = True
+        Retries up to 10 times with increasing delay — after a crash the
+        SPI/GPIO hardware may need time to recover. Falls back to no-render
+        mode if all attempts fail.
+        """
+        if self._display is None:
+            return
 
-        # Register KeyReceiver callbacks
+        max_retries = 10
+        for attempt in range(1, max_retries + 1):
+            try:
+                self._display.init()
+                self._display.render()  # Draw initial "Waiting..." screen
+                return
+            except Exception:
+                if attempt < max_retries:
+                    delay = min(attempt * 2, 10)  # 2,4,6,8,10,10,...s
+                    logger.warning(
+                        "LCD init failed (attempt %d/%d), "
+                        "retrying in %ds...",
+                        attempt,
+                        max_retries,
+                        delay,
+                        exc_info=True,
+                    )
+                    await asyncio.sleep(delay)
+                else:
+                    logger.warning(
+                        "LCD init failed after %d attempts, "
+                        "falling back to no-render mode",
+                        max_retries,
+                        exc_info=True,
+                    )
+                    self._display = None
+                    self._no_render = True
+                    self._fell_back_to_no_render = True
+
+    def _register_callbacks(self) -> None:
+        """Register KeyReceiver event callbacks."""
         self._receiver.on_key_press = self._on_key_press
         self._receiver.on_key_release = self._on_key_release
         self._receiver.on_connect = self._on_connect
         self._receiver.on_disconnect = self._on_disconnect
 
-        # Start BLE receiver
+    async def run(self) -> None:
+        """Start the application and run until shutdown signal."""
+        self._loop = asyncio.get_running_loop()
+
+        await self._init_lcd()
+        self._register_callbacks()
         await self._receiver.start()
 
         # Register signal handlers
@@ -158,9 +166,6 @@ class LCDApp:
                     self._no_render_drain_loop(), name="no_render_drain"
                 )
             )
-            # If we fell back to no-render due to display init failure,
-            # schedule an auto-exit so the loop script can restart us
-            # with a fresh hardware reset and retry display init.
             if self._fell_back_to_no_render:
                 tasks.append(
                     asyncio.create_task(
@@ -221,11 +226,11 @@ class LCDApp:
         )
         self._enqueue(display_event)
 
-    def _on_connect(self, event: ConnectionEvent) -> None:
+    def _on_connect(self, _event: ConnectionEvent) -> None:
         """Handle BLE connection (sync callback)."""
         self._enqueue(DisplayConnectionEvent(connected=True))
 
-    def _on_disconnect(self, event: ConnectionEvent) -> None:
+    def _on_disconnect(self, _event: ConnectionEvent) -> None:
         """Handle BLE disconnection (sync callback)."""
         self._enqueue(DisplayConnectionEvent(connected=False))
 
@@ -259,6 +264,36 @@ class LCDApp:
 
     # --- Async tasks ---
 
+    async def _drain_event_queue(self) -> int:
+        """Wait for one event and drain any remaining queued events.
+
+        Blocks until an event arrives (with 0.5s timeout for shutdown
+        checks), then processes all additionally queued events in a batch.
+
+        Returns:
+            Number of additional events drained beyond the first one.
+            Returns -1 if timed out (no event received).
+        """
+        try:
+            event = await asyncio.wait_for(
+                self._event_queue.get(), timeout=0.5
+            )
+        except asyncio.TimeoutError:
+            return -1
+
+        self._process_event(event)
+
+        drained = 0
+        while not self._event_queue.empty():
+            try:
+                event = self._event_queue.get_nowait()
+                self._process_event(event)
+                drained += 1
+            except asyncio.QueueEmpty:
+                break
+
+        return drained
+
     async def _no_render_drain_loop(self) -> None:
         """Drain event queue and log events (no-render mode).
 
@@ -268,23 +303,7 @@ class LCDApp:
         """
         while not self._shutdown_event.is_set():
             try:
-                try:
-                    event = await asyncio.wait_for(
-                        self._event_queue.get(), timeout=0.5
-                    )
-                except asyncio.TimeoutError:
-                    continue
-
-                self._process_event(event)
-
-                # Drain additional queued events
-                while not self._event_queue.empty():
-                    try:
-                        event = self._event_queue.get_nowait()
-                        self._process_event(event)
-                    except asyncio.QueueEmpty:
-                        break
-
+                await self._drain_event_queue()
             except asyncio.CancelledError:
                 break
             except Exception:
@@ -305,31 +324,15 @@ class LCDApp:
 
         while not self._shutdown_event.is_set():
             try:
-                # Wait for an event (with timeout to check shutdown)
-                try:
-                    event = await asyncio.wait_for(
-                        self._event_queue.get(), timeout=0.5
-                    )
-                except asyncio.TimeoutError:
-                    # Periodic GC even when idle
+                # Wait for events and drain queue
+                drained = await self._drain_event_queue()
+                if drained < 0:
+                    # Timeout — periodic GC even when idle
                     now = time.monotonic()
                     if now - last_gc_time > gc_interval:
                         gc.collect()
                         last_gc_time = now
                     continue
-
-                # Process this event
-                self._process_event(event)
-
-                # Drain any additional queued events (batch processing)
-                drained = 0
-                while not self._event_queue.empty():
-                    try:
-                        event = self._event_queue.get_nowait()
-                        self._process_event(event)
-                        drained += 1
-                    except asyncio.QueueEmpty:
-                        break
 
                 if drained > EVENT_QUEUE_MAX_SIZE // 2:
                     logger.warning(
@@ -337,28 +340,12 @@ class LCDApp:
                     )
 
                 # Throttle rendering
-                now = time.monotonic()
-                elapsed = now - self._display.last_render_time
+                elapsed = self._display.time_since_render()
                 if elapsed < min_interval:
                     await asyncio.sleep(min_interval - elapsed)
 
                 # Render (offload blocking SPI I/O to thread pool)
-                if not self._rendering:
-                    self._rendering = True
-                    self._render_start_time = time.monotonic()
-                    try:
-                        logger.debug("render: start")
-                        loop = asyncio.get_running_loop()
-                        await loop.run_in_executor(
-                            None, self._display.render
-                        )
-                        render_ms = (
-                            time.monotonic() - self._render_start_time
-                        ) * 1000
-                        logger.debug("render: done (%.1fms)", render_ms)
-                    finally:
-                        self._rendering = False
-                        self._render_start_time = 0.0
+                await self._execute_render("render")
 
                 # Periodic GC
                 now = time.monotonic()
@@ -443,6 +430,29 @@ class LCDApp:
         parts.append(key_value)
         return " + ".join(parts)
 
+    async def _execute_render(self, label: str = "render") -> None:
+        """Execute a render cycle with timing and flag management.
+
+        Guards against concurrent renders via the _rendering flag.
+        Offloads blocking SPI I/O to a thread pool executor.
+
+        Args:
+            label: Log label to distinguish render call sites.
+        """
+        if self._rendering:
+            return
+        self._rendering = True
+        self._render_start_time = time.monotonic()
+        try:
+            logger.debug("%s: start", label)
+            loop = asyncio.get_running_loop()
+            await loop.run_in_executor(None, self._display.render)
+            render_ms = (time.monotonic() - self._render_start_time) * 1000
+            logger.debug("%s: done (%.1fms)", label, render_ms)
+        finally:
+            self._rendering = False
+            self._render_start_time = 0.0
+
     async def _button_poll_loop(self) -> None:
         """Poll physical buttons and handle presses.
 
@@ -469,23 +479,7 @@ class LCDApp:
                 # KEY1: clear buffer (on press edge)
                 if key1_pressed and not key1_was_pressed:
                     self._display.clear_buffer()
-                    if not self._rendering:
-                        self._rendering = True
-                        self._render_start_time = time.monotonic()
-                        try:
-                            logger.debug("render(btn): start")
-                            await loop.run_in_executor(
-                                None, self._display.render
-                            )
-                            render_ms = (
-                                time.monotonic() - self._render_start_time
-                            ) * 1000
-                            logger.debug(
-                                "render(btn): done (%.1fms)", render_ms
-                            )
-                        finally:
-                            self._rendering = False
-                            self._render_start_time = 0.0
+                    await self._execute_render("render(btn)")
                     logger.debug("KEY1 pressed: buffer cleared")
 
                 # KEY2: cycle backlight (on press edge)

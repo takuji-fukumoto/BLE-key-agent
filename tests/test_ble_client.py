@@ -361,7 +361,7 @@ class TestBleClientReconnection:
 
         mock_client = MagicMock()
 
-        with patch.object(asyncio, 'get_event_loop') as mock_loop:
+        with patch.object(asyncio, 'get_running_loop') as mock_loop:
             mock_event_loop = MagicMock()
             mock_task = MagicMock()
             mock_event_loop.create_task = MagicMock(return_value=mock_task)

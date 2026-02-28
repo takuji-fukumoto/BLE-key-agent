@@ -17,7 +17,7 @@ from pathlib import Path
 # Physical buttons
 GPIO_KEY1: int = 21  # Buffer clear
 GPIO_KEY2: int = 20  # Backlight control
-GPIO_KEY3: int = 16  # Reserved
+GPIO_KEY3: int = 16  # Reserved (future use)
 
 # --- Display Constants ---
 

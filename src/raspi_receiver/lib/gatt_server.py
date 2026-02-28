@@ -34,8 +34,8 @@ class GATTServer:
     Args:
         device_name: BLE advertised device name.
         on_write: Callback invoked when data is written to the key characteristic.
-        on_connect: Callback invoked when a client connects.
-        on_disconnect: Callback invoked when a client disconnects.
+        on_connect: Callback invoked when a client connects (future use).
+        on_disconnect: Callback invoked when a client disconnects (future use).
     """
 
     def __init__(
