@@ -5,7 +5,7 @@
 ## プロジェクト概要
 
 - mac のキー入力を BLE GATT 通信で Raspberry Pi に送信するシステム
-- Mac 側: Flet GUI アプリ
+- このリポジトリは通信ライブラリ提供を中心とし、GUIアプリは別リポジトリで実装
 - Pi 側: ライブラリ + LCD アプリ
 
 ## 実装前に読むドキュメント
@@ -56,7 +56,7 @@
 2. `raspi_receiver/lib/`（BLE サーバー, キー受信）
 3. `raspi_receiver/apps/lcd_display/`（LCD 表示）
 4. `mac_agent/` コア（BLE + キー監視）
-5. `mac_agent/views/`（Flet GUI）
+5. 外部GUI/利用アプリへの統合（別リポジトリ）
 6. 結合テスト
 
 ## Claude 設定との差分メモ

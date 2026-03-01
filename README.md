@@ -154,6 +154,44 @@ cd BLE-key-agent
 
 接続後、Mac でのキー入力がリアルタイムに Pi の LCD に表示される。
 
+### 3. ライブラリとして利用（送信側）
+
+`mac_agent` はアプリとしての実行だけでなく、他リポジトリから再利用できるAPIを提供する。
+
+```python
+import asyncio
+
+from mac_agent import AgentConfig, KeyBleAgent
+
+
+async def main() -> None:
+	agent = KeyBleAgent(
+		config=AgentConfig(device_name="RasPi-KeyAgent"),
+		on_status_change=lambda s: print(f"status={s.value}"),
+	)
+
+	devices = await agent.scan(timeout=5.0)
+	if not devices:
+		return
+
+	await agent.connect(devices[0].address)
+	await agent.start()
+	try:
+		await asyncio.Event().wait()
+	finally:
+		await agent.stop()
+
+
+asyncio.run(main())
+```
+
+主な公開API:
+
+- `AgentConfig`: 再接続、heartbeat、送信間隔などの設定
+- `KeyBleAgent`: キー監視 + BLE送信の高レベル統合API
+- `KeyboardMonitor`: キー監視のみを利用するラッパーAPI
+- `BleSender`: BLE送信のみを利用する低レイヤAPI
+
 ### テストの実行
 
 ```bash

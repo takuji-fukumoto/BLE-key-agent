@@ -2,9 +2,9 @@
 
 ## 1. 概要
 
-macOS上で動作するGUIアプリケーション。
+macOS上で動作する送信ライブラリ/CLI。
 pynputでキー入力を監視し、BLE GATT通信でRaspberry Piにキーイベントを送信する。
-GUIフレームワークにはFletを使用。
+GUIアプリケーションへの統合は別リポジトリで行う。
 
 ## 2. 画面構成
 
@@ -154,9 +154,9 @@ class BleClient:
         """接続中のデバイス情報。"""
 ```
 
-### 4.3 app.py
+### 4.3 agent.py
 
-KeyMonitor と BleClient を統合し、Flet UIと接続する。
+KeyMonitor と BleClient を統合し、外部アプリから利用しやすい高レベルAPIを提供する。
 
 **責務:**
 - KeyMonitor のキューを監視し、BleClient.send_key() を呼ぶ
@@ -179,18 +179,15 @@ class BleKeyAgentApp:
         """接続断時の自動再接続ループ。"""
 ```
 
-### 4.4 views/
+### 4.4 外部GUI連携（別リポジトリ）
 
-Flet UIコンポーネント。
+GUI連携は本リポジトリ外で実装する。本リポジトリは `mac_agent` の公開APIを提供する。
 
 ```python
-# main_view.py
-class MainView(ft.Column):
-    """メイン画面全体のレイアウト。"""
-
-# device_list.py
-class DeviceListView(ft.Column):
-    """スキャン結果のデバイス一覧。"""
+# 外部GUI側の想定
+# - mac_agent.KeyBleAgent を初期化
+# - scan/connect/start/stop をUIイベントに紐付け
+# - on_status_change / on_error / on_key_event を画面更新に反映
 ```
 
 ## 5. 起動方法
@@ -207,4 +204,4 @@ python main.py
   - システム設定 → プライバシーとセキュリティ → アクセシビリティ
   - ターミナル/IDE/ビルド済みアプリを追加
 - **Bluetooth権限**: 初回スキャン時にシステムダイアログが表示される
-- **Flet**: デスクトップモードで起動（ブラウザモードではなくネイティブウィンドウ）
+- **外部GUI連携**: GUI側から `mac_agent` の公開APIを呼び出して統合する

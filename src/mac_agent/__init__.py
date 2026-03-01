@@ -1,7 +1,7 @@
-"""Mac agent for BLE key transmission.
+"""Mac-side reusable APIs for BLE key transmission.
 
-Provides KeyMonitor for keyboard input monitoring and BleClient for
-BLE communication with Raspberry Pi peripheral.
+Exports high-level orchestration (`KeyBleAgent`), focused components
+(`KeyboardMonitor`, `BleSender`), and compatibility types.
 """
 
 from mac_agent.agent import KeyBleAgent
