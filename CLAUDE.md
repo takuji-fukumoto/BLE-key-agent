@@ -53,7 +53,7 @@ src/
 
 ## 実装時の注意
 
-- **Pi側ライブラリ分離**: `raspi_receiver/lib/` はBLE通信+キー受信hookのみ。LCD等のハードウェア依存は `apps/` に置く
+- **Pi側ライブラリ分離**: `raspi_receiver/lib/` はBLE通信+キー受信hookのみ。LCD等のハードウェア依存は `sample/raspi_receiver/apps/` に置く
 - **bless使用**: Pi側BLEサーバーはblessライブラリを使う（D-Bus直接操作は不要）
 - **Write Without Response優先**: 低レイテンシのためGATT Writeより優先
 - **pynputスレッド安全性**: pynputは別スレッド動作。asyncio.Queueでイベントループに橋渡し
@@ -71,7 +71,7 @@ src/
 
 1. common/ (UUID, プロトコル)
 2. raspi_receiver/lib/ (BLEサーバー, キー受信)
-3. raspi_receiver/apps/lcd_display/ (LCD表示)
+3. sample/raspi_receiver/apps/lcd_display/ (LCD表示サンプル)
 4. mac_agent/ コア (BLE + キー監視)
 5. 外部GUI/利用アプリへの統合（別リポジトリ）
 6. 結合テスト

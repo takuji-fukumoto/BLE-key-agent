@@ -27,7 +27,7 @@ from typing import Optional
 
 from PIL import Image, ImageDraw, ImageFont
 
-from raspi_receiver.apps.lcd_display.config import (
+from .config import (
     BACKLIGHT_DEFAULT,
     BACKLIGHT_LEVELS,
     COLORS,
@@ -43,7 +43,7 @@ from raspi_receiver.apps.lcd_display.config import (
     LAYOUT,
     SPI_SPEED_HZ,
 )
-from raspi_receiver.apps.lcd_display.render_process import RenderProxy
+from .render_process import RenderProxy
 
 logger = logging.getLogger(__name__)
 

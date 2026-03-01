@@ -75,21 +75,17 @@ BLE-key-agent/
 │   │   ├── keyboard_monitor.py   # ライブラリ向け入力監視ラッパー
 │   │   └── requirements.txt
 │   │
-│   └── raspi_receiver/            # Raspberry Pi側ライブラリ + アプリ
+│   └── raspi_receiver/            # Raspberry Pi側ライブラリ
 │       ├── lib/                   # ライブラリ部分（再利用可能）
 │       │   ├── __init__.py
 │       │   ├── gatt_server.py     # BLE GATTサーバー (bless)
 │       │   ├── key_receiver.py    # キー受信 + hookコールバック
 │       │   └── types.py           # 型定義 (KeyEvent等)
-│       ├── apps/                  # アプリケーション実装
-│       │   ├── __init__.py
-│       │   └── lcd_display/       # LCD表示アプリ
-│       │       ├── __init__.py
-│       │       ├── main.py        # LCD表示アプリ起動
-│       │       ├── display.py     # LCD描画ロジック
-│       │       └── config.py      # GPIO/SPI設定
-│       ├── setup_raspi.sh
 │       └── requirements.txt
+├── sample/                        # サンプル実装
+│   └── raspi_receiver/apps/
+│       ├── cli_receiver/
+│       └── lcd_display/
 │
 └── tests/                         # テスト
     ├── test_protocol.py
@@ -109,7 +105,7 @@ mac_agent/ble_client  ──▶ mac_agent/agent (接続状態管理)
 mac_agent/agent       ──▶ external GUI/CLI (別リポジトリUI連携)
 
 raspi_receiver/lib/gatt_server   ──▶ raspi_receiver/lib/key_receiver
-raspi_receiver/lib/key_receiver  ──▶ raspi_receiver/apps/* (callback)
+raspi_receiver/lib/key_receiver  ──▶ sample/raspi_receiver/apps/* (callback)
 ```
 
 ## 4. コンポーネント責務
@@ -140,7 +136,7 @@ raspi_receiver/lib/key_receiver  ──▶ raspi_receiver/apps/* (callback)
 | `key_receiver.py` | 受信データのデコード、コールバック呼び出し |
 | `types.py` | KeyEvent, ConnectionEvent等の型定義 |
 
-### 4.4 raspi_receiver/apps/ （アプリケーション）
+### 4.4 sample/raspi_receiver/apps/ （サンプルアプリケーション）
 
 | モジュール | 責務 |
 |---|---|

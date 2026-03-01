@@ -12,7 +12,7 @@ Phase 1: 共通定義 (common/)
     ↓
 Phase 2: Pi側ライブラリ (raspi_receiver/lib/)
     ↓
-Phase 3: Pi側LCD表示アプリ (raspi_receiver/apps/lcd_display/)
+Phase 3: Pi側LCD表示アプリ (sample/raspi_receiver/apps/lcd_display/)
     ↓
 Phase 4: Mac側コア (mac_agent/ - BLE + KeyMonitor)
     ↓
@@ -51,7 +51,7 @@ Phase 6: 結合テスト・調整
 
 **参照**: [spec-raspi-receiver.md](spec-raspi-receiver.md) §4
 
-- `src/raspi_receiver/apps/lcd_display/`
+- `sample/raspi_receiver/apps/lcd_display/`
 - `example/1.3inch_LCD_HAT_python/` のドライバを参照
 
 **完了条件:**

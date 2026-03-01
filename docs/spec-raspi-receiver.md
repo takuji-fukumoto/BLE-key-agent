@@ -141,7 +141,7 @@ async def main():
 asyncio.run(main())
 ```
 
-## 4. LCD表示アプリ仕様 (`raspi_receiver/apps/lcd_display/`)
+## 4. LCD表示アプリ仕様 (`sample/raspi_receiver/apps/lcd_display/`)
 
 ### 4.1 画面レイアウト
 
@@ -192,7 +192,7 @@ sudo ./setup_raspi.sh
 pip install -r requirements.txt
 
 # LCD表示アプリの起動
-python -m raspi_receiver.apps.lcd_display.main
+PYTHONPATH=src python -m sample.raspi_receiver.apps.lcd_display.main
 ```
 
 ## 6. ライブラリ設計方針

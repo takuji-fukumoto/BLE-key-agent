@@ -1,4 +1,4 @@
-"""Unit tests for raspi_receiver.apps.lcd_display module.
+"""Unit tests for sample.raspi_receiver.apps.lcd_display module.
 
 Tests cover screen state management, display state updates,
 key formatting, modifier formatting, event processing,
@@ -13,9 +13,9 @@ import pytest
 from PIL import Image, ImageDraw, ImageFont
 
 from common.protocol import KeyType, Modifiers
-from raspi_receiver.apps.lcd_display.config import EVENT_QUEUE_MAX_SIZE
-from raspi_receiver.apps.lcd_display.display import LCDDisplay, ScreenState
-from raspi_receiver.apps.lcd_display.main import (
+from sample.raspi_receiver.apps.lcd_display.config import EVENT_QUEUE_MAX_SIZE
+from sample.raspi_receiver.apps.lcd_display.display import LCDDisplay, ScreenState
+from sample.raspi_receiver.apps.lcd_display.main import (
     DisplayConnectionEvent,
     DisplayKeyEvent,
     LCDApp,
@@ -242,8 +242,8 @@ class TestProcessEvent:
     def app(self) -> LCDApp:
         """Create LCDApp with mocked internals."""
         with patch(
-            "raspi_receiver.apps.lcd_display.main.KeyReceiver"
-        ), patch("raspi_receiver.apps.lcd_display.main.LCDDisplay") as mock_display_cls:
+            "sample.raspi_receiver.apps.lcd_display.main.KeyReceiver"
+        ), patch("sample.raspi_receiver.apps.lcd_display.main.LCDDisplay") as mock_display_cls:
             mock_display = MagicMock()
             mock_display_cls.return_value = mock_display
             app = LCDApp()
@@ -340,8 +340,8 @@ class TestRenderOffloading:
     def app(self) -> LCDApp:
         """Create LCDApp with mocked internals."""
         with patch(
-            "raspi_receiver.apps.lcd_display.main.KeyReceiver"
-        ), patch("raspi_receiver.apps.lcd_display.main.LCDDisplay") as mock_display_cls:
+            "sample.raspi_receiver.apps.lcd_display.main.KeyReceiver"
+        ), patch("sample.raspi_receiver.apps.lcd_display.main.LCDDisplay") as mock_display_cls:
             mock_display = MagicMock()
             mock_display_cls.return_value = mock_display
             app = LCDApp()
@@ -445,8 +445,8 @@ class TestEventQueueBackpressure:
     def app(self) -> LCDApp:
         """Create LCDApp with mocked internals."""
         with patch(
-            "raspi_receiver.apps.lcd_display.main.KeyReceiver"
-        ), patch("raspi_receiver.apps.lcd_display.main.LCDDisplay") as mock_display_cls:
+            "sample.raspi_receiver.apps.lcd_display.main.KeyReceiver"
+        ), patch("sample.raspi_receiver.apps.lcd_display.main.LCDDisplay") as mock_display_cls:
             mock_display = MagicMock()
             mock_display_cls.return_value = mock_display
             app = LCDApp()
@@ -561,7 +561,7 @@ class TestConvertToRgb565:
 
     def test_rgb565_conversion_correctness(self) -> None:
         """Test known RGB888 values produce correct RGB565 output."""
-        from raspi_receiver.apps.lcd_display.display import _convert_to_rgb565
+        from sample.raspi_receiver.apps.lcd_display.display import _convert_to_rgb565
 
         # Create 2x1 image: red pixel + blue pixel
         img = Image.new("RGB", (2, 1))
@@ -583,7 +583,7 @@ class TestConvertToRgb565:
 
     def test_returns_bytearray(self) -> None:
         """Test conversion returns bytearray."""
-        from raspi_receiver.apps.lcd_display.display import _convert_to_rgb565
+        from sample.raspi_receiver.apps.lcd_display.display import _convert_to_rgb565
 
         img = Image.new("RGB", (2, 1), (128, 128, 128))
         result = _convert_to_rgb565(img)
@@ -592,7 +592,7 @@ class TestConvertToRgb565:
 
     def test_reuses_provided_buffer(self) -> None:
         """Test that the provided buffer is written to in-place."""
-        from raspi_receiver.apps.lcd_display.display import _convert_to_rgb565
+        from sample.raspi_receiver.apps.lcd_display.display import _convert_to_rgb565
 
         img = Image.new("RGB", (1, 1), (255, 255, 255))
         buf = bytearray(2)
@@ -681,8 +681,8 @@ class TestEnqueueExceptionSafety:
     @pytest.fixture
     def app(self) -> LCDApp:
         with patch(
-            "raspi_receiver.apps.lcd_display.main.KeyReceiver"
-        ), patch("raspi_receiver.apps.lcd_display.main.LCDDisplay") as mock_display_cls:
+            "sample.raspi_receiver.apps.lcd_display.main.KeyReceiver"
+        ), patch("sample.raspi_receiver.apps.lcd_display.main.LCDDisplay") as mock_display_cls:
             mock_display = MagicMock()
             mock_display_cls.return_value = mock_display
             app = LCDApp()

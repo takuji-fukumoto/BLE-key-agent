@@ -30,7 +30,7 @@ import threading
 from multiprocessing.connection import Connection
 from typing import Any
 
-from raspi_receiver.apps.lcd_display.config import (
+from .config import (
     SPI_RENDER_TIMEOUT_SEC,
     SPI_SPEED_HZ,
 )

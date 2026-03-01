@@ -3,7 +3,7 @@
 Integrates KeyReceiver (BLE library) with LCDDisplay (rendering),
 using asyncio.Queue to bridge sync BLE callbacks to async LCD updates.
 
-Run with: python -m raspi_receiver.apps.lcd_display.main
+Run with: python -m sample.raspi_receiver.apps.lcd_display.main
 """
 
 from __future__ import annotations
@@ -24,13 +24,13 @@ from typing import Union
 from common.protocol import KeyEvent, KeyType, Modifiers
 from raspi_receiver.lib import ConnectionEvent, KeyReceiver
 
-from raspi_receiver.apps.lcd_display.config import (
+from .config import (
     BUTTON_POLL_INTERVAL_MS,
     EVENT_QUEUE_MAX_SIZE,
     RENDER_MIN_INTERVAL_MS,
     SPI_SPEED_HZ,
 )
-from raspi_receiver.apps.lcd_display.display import LCDDisplay
+from .display import LCDDisplay
 
 logger = logging.getLogger(__name__)
 

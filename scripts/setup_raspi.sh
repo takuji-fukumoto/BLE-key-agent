@@ -247,9 +247,9 @@ echo ""
 echo "LCD 表示アプリの起動（sudo 不要）:"
 echo "  cd $PROJECT_ROOT"
 if $USE_VENV; then
-    echo "  ./scripts/run_raspi.sh          # venv は自動検出されます"
+    echo "  ./sample/scripts/run_raspi.sh   # venv は自動検出されます"
 else
-    echo "  ./scripts/run_raspi.sh"
+    echo "  ./sample/scripts/run_raspi.sh"
 fi
 echo ""
 echo "トラブルシューティング:"
