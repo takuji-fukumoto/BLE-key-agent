@@ -59,6 +59,28 @@ log_msg() {
     echo "$msg" >> "$LOOP_LOG"
 }
 
+ensure_bluetooth_discoverable() {
+    if ! command -v bluetoothctl >/dev/null 2>&1; then
+        log_msg "⚠️  bluetoothctl が見つからないため discoverable 設定をスキップします"
+        return
+    fi
+
+    if bluetoothctl show 2>/dev/null | grep -q "Discoverable: yes"; then
+        log_msg "Bluetooth discoverable: already yes"
+        return
+    fi
+
+    log_msg "Bluetooth discoverable を有効化します..."
+    if bluetoothctl power on >/dev/null 2>&1 \
+        && bluetoothctl pairable on >/dev/null 2>&1 \
+        && bluetoothctl discoverable-timeout 0 >/dev/null 2>&1 \
+        && bluetoothctl discoverable on >/dev/null 2>&1; then
+        log_msg "Bluetooth discoverable: enabled"
+    else
+        log_msg "⚠️  discoverable 設定に失敗しました。必要に応じて手動で実行してください: sudo bluetoothctl discoverable on"
+    fi
+}
+
 echo "=========================================="
 echo "BLE Key Agent - Raspberry Pi LCD App"
 echo "  (auto-restart mode)"
@@ -83,6 +105,7 @@ user_interrupted=false
 trap 'user_interrupted=true' INT TERM
 
 while true; do
+    ensure_bluetooth_discoverable
     log_msg "アプリを起動します (restart #${restart_count})..."
 
     PYTHONPATH=src "$PYTHON" -m raspi_receiver.apps.lcd_display.main "$@"
