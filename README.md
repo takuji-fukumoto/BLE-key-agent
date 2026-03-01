@@ -192,6 +192,57 @@ asyncio.run(main())
 - `KeyboardMonitor`: キー監視のみを利用するラッパーAPI
 - `BleSender`: BLE送信のみを利用する低レイヤAPI
 
+### 4. ライブラリとして利用（受信側）
+
+`raspi_receiver.lib` は LCD 非依存の受信ライブラリとして利用できる。
+
+```python
+import asyncio
+
+from raspi_receiver.lib import KeyReceiver, KeyReceiverConfig
+
+
+async def main() -> None:
+	receiver = KeyReceiver(
+		config=KeyReceiverConfig(
+			device_name="RasPi-KeyAgent",
+			disconnect_timeout_sec=10.0,
+		)
+	)
+
+	receiver.register_callbacks(
+		on_key_press=lambda event: print(f"press: {event.value}"),
+		on_key_release=lambda event: print(f"release: {event.value}"),
+		on_disconnect=lambda _: print("disconnected"),
+	)
+
+	await receiver.start()
+	try:
+		await asyncio.Event().wait()
+	finally:
+		await receiver.stop()
+
+
+asyncio.run(main())
+```
+
+**高レベル/低レイヤ選択指針**
+
+- `KeyReceiver`（高レベル）: ほとんどのアプリ向け。デシリアライズ・heartbeat処理・切断監視を内包
+- `GATTServer`（低レイヤ）: 独自バイナリや独自プロトコル処理を行う場合に選択
+
+**CLIサンプル**
+
+```bash
+PYTHONPATH=src python -m raspi_receiver.apps.cli_receiver.main
+```
+
+利用可能オプション:
+
+- `--device-name`
+- `--disconnect-timeout`
+- `--max-buffer-length`
+
 ### テストの実行
 
 ```bash

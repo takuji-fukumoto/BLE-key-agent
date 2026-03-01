@@ -256,6 +256,18 @@ class TestKeyReceiverHandleWrite:
         event = KeyEvent(key_type=KeyType.CHAR, value="a", press=True)
         on_write(event.serialize())  # Should not propagate
 
+    def test_key_release_callback_exception_is_caught(
+        self, mock_gatt_server
+    ) -> None:
+        receiver, on_write = self._get_receiver_with_write_handler(mock_gatt_server)
+
+        receiver.on_key_release = MagicMock(
+            side_effect=RuntimeError("release app error")
+        )
+
+        event = KeyEvent(key_type=KeyType.CHAR, value="a", press=False)
+        on_write(event.serialize())  # Should not propagate
+
 
 class TestKeyReceiverConnection:
     """Tests for KeyReceiver connection state tracking."""
@@ -449,6 +461,60 @@ class TestKeyReceiverTimeout:
 
         assert receiver.is_connected is True
         disconnect_handler.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_no_timeout_when_receiving_heartbeat(
+        self, mock_gatt_server
+    ) -> None:
+        receiver, on_write = self._get_receiver_with_write_handler(mock_gatt_server)
+
+        disconnect_handler = MagicMock()
+        receiver.on_disconnect = disconnect_handler
+
+        # Simulate a connection with recent heartbeat data
+        on_write(KeyEvent.heartbeat().serialize())
+
+        receiver._loop = MagicMock()
+        import asyncio
+
+        monitor_task = asyncio.create_task(receiver._timeout_monitor())
+        await asyncio.sleep(1.5)
+        monitor_task.cancel()
+        try:
+            await monitor_task
+        except asyncio.CancelledError:
+            pass
+
+        assert receiver.is_connected is True
+        disconnect_handler.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_disconnect_callback_exception_is_caught(
+        self, mock_gatt_server
+    ) -> None:
+        receiver, on_write = self._get_receiver_with_write_handler(mock_gatt_server)
+
+        receiver.on_disconnect = MagicMock(
+            side_effect=RuntimeError("disconnect app error")
+        )
+
+        # Simulate a connection and force timeout
+        on_write(KeyEvent(key_type=KeyType.CHAR, value="a", press=True).serialize())
+        receiver._last_receive_time = time.monotonic() - DISCONNECT_TIMEOUT_SEC - 1
+
+        receiver._loop = MagicMock()
+        import asyncio
+
+        monitor_task = asyncio.create_task(receiver._timeout_monitor())
+        await asyncio.sleep(1.5)
+        monitor_task.cancel()
+        try:
+            await monitor_task
+        except asyncio.CancelledError:
+            pass
+
+        assert receiver.is_connected is False
+        receiver.on_disconnect.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_reconnect_after_timeout(self, mock_gatt_server) -> None:
