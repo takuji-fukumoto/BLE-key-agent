@@ -98,38 +98,12 @@ def _render_worker(conn: Connection, spi_speed: int) -> None:
         conn: Pipe connection for receiving commands and sending responses.
         spi_speed: SPI bus speed in Hz.
     """
-    import sys
-    import types
-    from pathlib import Path
-
     # Minimal logging in subprocess (stderr only)
     logging.basicConfig(
         level=logging.DEBUG,
         format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
     )
     sub_logger = logging.getLogger("render_worker")
-
-    # Add LCD HAT driver directory to sys.path
-    driver_dir = str(
-        Path(__file__).resolve().parents[4]
-        / "example"
-        / "1.3inch_LCD_HAT_python"
-    )
-    if driver_dir not in sys.path:
-        sys.path.insert(0, driver_dir)
-
-    # Numpy stub if not installed (common on ARM)
-    has_numpy = "numpy" in sys.modules
-    if not has_numpy:
-        try:
-            import numpy  # noqa: F401
-
-            has_numpy = True
-        except ImportError:
-            stub = types.ModuleType("numpy")
-            stub.uint8 = None  # type: ignore[attr-defined]
-            sys.modules["numpy"] = stub
-            sub_logger.info("numpy not available in render subprocess")
 
     # PWM fallback if needed
     patch_pwm = False
@@ -147,9 +121,9 @@ def _render_worker(conn: Connection, spi_speed: int) -> None:
         gpiozero.PWMOutputDevice = _DigitalBacklightFallback  # type: ignore[assignment,misc]
         sub_logger.warning("PWM not supported, backlight will be on/off only")
 
-    import ST7789
+    from raspi_receiver.drivers.st7789 import ST7789
 
-    disp = ST7789.ST7789()
+    disp = ST7789()
 
     # Override SPI speed
     if disp.SPI is not None:

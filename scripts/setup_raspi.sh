@@ -68,7 +68,7 @@ if [ ! -f "$APT_CONF" ]; then
 fi
 
 # 1. システムパッケージ + Python パッケージ (apt)
-#    Waveshare wiki 準拠: gpiozero, PIL, numpy, spidev は apt で入れる。
+#    Waveshare wiki 準拠: gpiozero, PIL, spidev は apt で入れる。
 #    pip で入れると apt の lgpio との連携が壊れるため。
 echo ""
 echo "[1/6] システムパッケージのインストール..."
@@ -81,7 +81,6 @@ apt install -y \
     python3-lgpio \
     python3-spidev \
     python3-pil \
-    python3-numpy \
     libopenjp2-7 \
     libtiff6 \
     libatlas3-base \
@@ -214,9 +213,6 @@ echo -n "  bless: "
 
 echo -n "  Pillow: "
 "$PYTHON" -c "from PIL import Image; print(Image.__version__)" 2>/dev/null || echo "インポートエラー"
-
-echo -n "  numpy: "
-"$PYTHON" -c "import numpy; print(numpy.__version__)" 2>/dev/null || echo "インポートエラー（オプション）"
 
 echo -n "  spidev: "
 "$PYTHON" -c "import spidev; print('OK')" 2>/dev/null || echo "インポートエラー"
