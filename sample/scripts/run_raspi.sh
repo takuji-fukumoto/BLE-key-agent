@@ -12,7 +12,7 @@
 #   --log-dir     ログファイルの出力先ディレクトリ (デフォルト: logs/)
 #   --spi-speed   SPI バス速度 (Hz, デフォルト: 20000000)
 #
-# ※ 事前に setup_raspi.sh で権限設定済みであること
+# ※ 事前に sample/scripts/setup_raspi_sample.sh で権限設定済みであること
 #   （BLE ケーパビリティ + bluetooth/spi/gpio グループ）
 #
 

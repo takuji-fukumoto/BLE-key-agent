@@ -186,7 +186,10 @@ LCD HAT 240x240 ピクセルに以下を表示:
 
 ```bash
 # Raspberry Piの初期設定
-sudo ./setup_raspi.sh
+sudo ./scripts/setup_raspi.sh
+
+# LCD表示サンプルを使う場合のみ追加セットアップ
+sudo ./sample/scripts/setup_raspi_sample.sh
 
 # ライブラリと依存パッケージのインストール
 pip install -r requirements.txt

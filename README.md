@@ -49,10 +49,11 @@ Mac のキー入力を BLE GATT 通信で Raspberry Pi に送信し、LCD に表
 BLE-key-agent/
 ├── scripts/                       # スクリプト
 │   ├── setup_mac.sh              #   Mac 用セットアップ
-│   ├── setup_raspi.sh            #   Raspberry Pi 用セットアップ
+│   ├── setup_raspi.sh            #   Raspberry Pi 用（ライブラリ最小）セットアップ
 │   └── run_mac.sh                #   Mac エージェント起動
 ├── sample/                        # サンプル実装
 │   ├── scripts/
+│   │   ├── setup_raspi_sample.sh #   Pi LCD サンプル追加セットアップ
 │   │   ├── run_raspi.sh          #   Pi LCD サンプル起動
 │   │   └── run_raspi_loop.sh     #   Pi LCD サンプル自動再起動
 │   └── raspi_receiver/apps/      #   Pi サンプルアプリ
@@ -111,11 +112,15 @@ pip3 install --user bleak>=0.21.0 pynput>=1.7.6
 git clone https://github.com/takuji-fukumoto/BLE-key-agent.git
 cd BLE-key-agent
 
-# 2. セットアップスクリプトの実行（sudo 必要）
+# 2. ライブラリ最小セットアップ（sudo 必要）
 chmod +x scripts/setup_raspi.sh
 sudo ./scripts/setup_raspi.sh
 
-# 3. SPI/GPIO 設定変更時は再起動
+# 3. LCDサンプルも使う場合のみ追加セットアップ
+chmod +x sample/scripts/setup_raspi_sample.sh
+sudo ./sample/scripts/setup_raspi_sample.sh
+
+# 4. SPI/GPIO 設定変更時は再起動
 sudo reboot
 ```
 
