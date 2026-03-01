@@ -43,6 +43,31 @@ for arg in "$@"; do
     prev_arg="$arg"
 done
 
+ensure_bluetooth_discoverable() {
+    if ! command -v bluetoothctl >/dev/null 2>&1; then
+        echo "⚠️  bluetoothctl が見つからないため discoverable 設定をスキップします"
+        return
+    fi
+
+    if bluetoothctl show 2>/dev/null | grep -q "Discoverable: yes"; then
+        echo "Bluetooth discoverable: already yes"
+        return
+    fi
+
+    echo "Bluetooth discoverable を有効化します..."
+    if bluetoothctl power on >/dev/null 2>&1 \
+        && bluetoothctl pairable on >/dev/null 2>&1 \
+        && bluetoothctl discoverable-timeout 0 >/dev/null 2>&1 \
+        && bluetoothctl discoverable on >/dev/null 2>&1; then
+        echo "Bluetooth discoverable: enabled"
+    else
+        echo "⚠️  discoverable 設定に失敗しました。必要に応じて手動で実行してください:"
+        echo "   sudo bluetoothctl discoverable on"
+    fi
+}
+
+ensure_bluetooth_discoverable
+
 echo "=========================================="
 echo "BLE Key Agent - Raspberry Pi LCD App"
 echo "=========================================="

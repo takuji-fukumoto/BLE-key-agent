@@ -80,12 +80,19 @@ class BleClient:
     """
 
     def __init__(
-        self, on_status_change: Callable[[BleStatus], None] | None = None,
+        self,
+        on_status_change: Callable[[BleStatus], None] | None = None,
+        reconnect_initial_delay: float = 1.0,
+        reconnect_max_delay: float = 60.0,
+        reconnect_backoff_multiplier: float = 2.0,
     ) -> None:
         """Initialize BleClient.
 
         Args:
             on_status_change: Callback for status changes.
+            reconnect_initial_delay: Initial delay before first reconnect attempt.
+            reconnect_max_delay: Maximum reconnect delay.
+            reconnect_backoff_multiplier: Exponential backoff multiplier.
         """
         self._on_status_change = on_status_change
         self._status = STATUS_DISCONNECTED
@@ -93,6 +100,9 @@ class BleClient:
         self._connected_device: Optional[BleDevice] = None
         self._reconnect_task: Optional[asyncio.Task] = None
         self._last_address: Optional[str] = None
+        self._reconnect_initial_delay = reconnect_initial_delay
+        self._reconnect_max_delay = reconnect_max_delay
+        self._reconnect_backoff_multiplier = reconnect_backoff_multiplier
 
     @property
     def status(self) -> BleStatus:
@@ -356,9 +366,9 @@ class BleClient:
 
         self._set_status(STATUS_RECONNECTING)
 
-        delay = 1.0  # Initial delay
-        max_delay = 60.0
-        backoff_multiplier = 2.0
+        delay = self._reconnect_initial_delay
+        max_delay = self._reconnect_max_delay
+        backoff_multiplier = self._reconnect_backoff_multiplier
 
         attempt = 0
         while True:
@@ -379,3 +389,13 @@ class BleClient:
 
             # Exponential backoff
             delay = min(delay * backoff_multiplier, max_delay)
+
+
+class BleSender(BleClient):
+    """Library-friendly BLE sender API.
+
+    This class is an explicit, reusable sender-facing alias for `BleClient`.
+    Existing applications can keep using `BleClient`, while external users
+    can depend on the semantically clearer `BleSender` name.
+    """
+

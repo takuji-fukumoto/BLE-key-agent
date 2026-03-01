@@ -154,6 +154,95 @@ cd BLE-key-agent
 
 接続後、Mac でのキー入力がリアルタイムに Pi の LCD に表示される。
 
+### 3. ライブラリとして利用（送信側）
+
+`mac_agent` はアプリとしての実行だけでなく、他リポジトリから再利用できるAPIを提供する。
+
+```python
+import asyncio
+
+from mac_agent import AgentConfig, KeyBleAgent
+
+
+async def main() -> None:
+	agent = KeyBleAgent(
+		config=AgentConfig(device_name="RasPi-KeyAgent"),
+		on_status_change=lambda s: print(f"status={s.value}"),
+	)
+
+	devices = await agent.scan(timeout=5.0)
+	if not devices:
+		return
+
+	await agent.connect(devices[0].address)
+	await agent.start()
+	try:
+		await asyncio.Event().wait()
+	finally:
+		await agent.stop()
+
+
+asyncio.run(main())
+```
+
+主な公開API:
+
+- `AgentConfig`: 再接続、heartbeat、送信間隔などの設定
+- `KeyBleAgent`: キー監視 + BLE送信の高レベル統合API
+- `KeyboardMonitor`: キー監視のみを利用するラッパーAPI
+- `BleSender`: BLE送信のみを利用する低レイヤAPI
+
+### 4. ライブラリとして利用（受信側）
+
+`raspi_receiver.lib` は LCD 非依存の受信ライブラリとして利用できる。
+
+```python
+import asyncio
+
+from raspi_receiver.lib import KeyReceiver, KeyReceiverConfig
+
+
+async def main() -> None:
+	receiver = KeyReceiver(
+		config=KeyReceiverConfig(
+			device_name="RasPi-KeyAgent",
+			disconnect_timeout_sec=10.0,
+		)
+	)
+
+	receiver.register_callbacks(
+		on_key_press=lambda event: print(f"press: {event.value}"),
+		on_key_release=lambda event: print(f"release: {event.value}"),
+		on_disconnect=lambda _: print("disconnected"),
+	)
+
+	await receiver.start()
+	try:
+		await asyncio.Event().wait()
+	finally:
+		await receiver.stop()
+
+
+asyncio.run(main())
+```
+
+**高レベル/低レイヤ選択指針**
+
+- `KeyReceiver`（高レベル）: ほとんどのアプリ向け。デシリアライズ・heartbeat処理・切断監視を内包
+- `GATTServer`（低レイヤ）: 独自バイナリや独自プロトコル処理を行う場合に選択
+
+**CLIサンプル**
+
+```bash
+PYTHONPATH=src python -m raspi_receiver.apps.cli_receiver.main
+```
+
+利用可能オプション:
+
+- `--device-name`
+- `--disconnect-timeout`
+- `--max-buffer-length`
+
 ### テストの実行
 
 ```bash

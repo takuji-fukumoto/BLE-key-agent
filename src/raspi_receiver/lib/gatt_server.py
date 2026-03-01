@@ -23,6 +23,8 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+WriteCallback = Callable[[bytes], None]
+
 
 class GATTServer:
     """BLE GATT server for receiving key events from Mac agent.
@@ -41,7 +43,7 @@ class GATTServer:
     def __init__(
         self,
         device_name: str = DEVICE_NAME,
-        on_write: Optional[Callable[[bytes], None]] = None,
+        on_write: Optional[WriteCallback] = None,
         on_connect: Optional[Callable[[], None]] = None,
         on_disconnect: Optional[Callable[[], None]] = None,
     ) -> None:
@@ -116,6 +118,20 @@ class GATTServer:
         """Whether the GATT server is currently running."""
         return self._running
 
+    @property
+    def on_write(self) -> Optional[WriteCallback]:
+        """Return the currently registered write callback."""
+        return self._on_write
+
+    def set_write_handler(self, on_write: Optional[WriteCallback]) -> None:
+        """Set or clear the low-level write handler.
+
+        Args:
+            on_write: Callback receiving raw bytes written to the key
+                characteristic. ``None`` clears the handler.
+        """
+        self._on_write = on_write
+
     def _handle_write(
         self, characteristic: BlessGATTCharacteristic, value: Any, **kwargs: Any
     ) -> None:
@@ -124,6 +140,12 @@ class GATTServer:
         Delegates to the user-provided on_write callback with raw bytes.
         Clears characteristic.value after reading to avoid holding
         references to accumulated BLE write data.
+
+        Notes:
+            This callback is invoked by bless as a synchronous callback.
+            Keep it lightweight/non-blocking. Protocol decoding, heartbeat
+            filtering, and application dispatch are responsibilities of
+            `KeyReceiver` (higher layer), not this low-level server.
         """
         data = bytes(value)
         characteristic.value = b""  # Clear to prevent data accumulation

@@ -34,6 +34,25 @@ logger = logging.getLogger(__name__)
 DISCONNECT_TIMEOUT_SEC: float = 10.0
 
 
+KeyCallback = Callable[[KeyEvent], None]
+ConnectionCallback = Callable[[ConnectionEvent], None]
+
+
+@dataclass(frozen=True)
+class KeyReceiverConfig:
+    """Configuration for KeyReceiver runtime behavior.
+
+    Attributes:
+        device_name: BLE advertised device name.
+        disconnect_timeout_sec: Timeout to consider client disconnected.
+        timeout_check_interval_sec: Poll interval for disconnect checks.
+    """
+
+    device_name: str = DEVICE_NAME
+    disconnect_timeout_sec: float = DISCONNECT_TIMEOUT_SEC
+    timeout_check_interval_sec: float = 1.0
+
+
 @dataclass
 class ReceiverStats:
     """BLE receiver statistics for monitoring and diagnostics."""
@@ -61,9 +80,28 @@ class KeyReceiver:
         device_name: BLE advertised device name for the GATT server.
     """
 
-    def __init__(self, device_name: str = DEVICE_NAME) -> None:
+    def __init__(
+        self,
+        device_name: str | None = None,
+        config: KeyReceiverConfig | None = None,
+    ) -> None:
+        """Initialize receiver with optional config.
+
+        Args:
+            device_name: Optional BLE advertised name (legacy shortcut).
+            config: Optional structured configuration.
+        """
+        resolved_config = config or KeyReceiverConfig()
+        if device_name is not None:
+            resolved_config = KeyReceiverConfig(
+                device_name=device_name,
+                disconnect_timeout_sec=resolved_config.disconnect_timeout_sec,
+                timeout_check_interval_sec=resolved_config.timeout_check_interval_sec,
+            )
+
+        self._config = resolved_config
         self._server = GATTServer(
-            device_name=device_name,
+            device_name=self._config.device_name,
             on_write=self._handle_write,
         )
         self._connected = False
@@ -74,10 +112,20 @@ class KeyReceiver:
         self._stats = ReceiverStats()
 
         # Application callbacks (set by user)
-        self.on_key_press: Optional[Callable[[KeyEvent], None]] = None
-        self.on_key_release: Optional[Callable[[KeyEvent], None]] = None
-        self.on_connect: Optional[Callable[[ConnectionEvent], None]] = None
-        self.on_disconnect: Optional[Callable[[ConnectionEvent], None]] = None
+        self.on_key_press: Optional[KeyCallback] = None
+        self.on_key_release: Optional[KeyCallback] = None
+        self.on_connect: Optional[ConnectionCallback] = None
+        self.on_disconnect: Optional[ConnectionCallback] = None
+
+    @property
+    def config(self) -> KeyReceiverConfig:
+        """Return receiver configuration."""
+        return self._config
+
+    @property
+    def is_running(self) -> bool:
+        """Whether receiver server and monitor are active."""
+        return self._server.is_running and self._timeout_task is not None
 
     @property
     def stats(self) -> ReceiverStats:
@@ -90,6 +138,9 @@ class KeyReceiver:
         Raises:
             RuntimeError: If the receiver is already running.
         """
+        if self.is_running:
+            raise RuntimeError("KeyReceiver is already running")
+
         self._loop = asyncio.get_running_loop()
         await self._server.start()
         self._timeout_task = asyncio.create_task(self._timeout_monitor())
@@ -112,6 +163,7 @@ class KeyReceiver:
         with self._conn_lock:
             was_connected = self._connected
             self._connected = False
+        self._loop = None
         if was_connected:
             logger.info("KeyReceiver stopped, client disconnected")
         else:
@@ -121,6 +173,34 @@ class KeyReceiver:
     def is_connected(self) -> bool:
         """Whether a BLE client is currently connected."""
         return self._connected
+
+    def register_callbacks(
+        self,
+        *,
+        on_key_press: Optional[KeyCallback] = None,
+        on_key_release: Optional[KeyCallback] = None,
+        on_connect: Optional[ConnectionCallback] = None,
+        on_disconnect: Optional[ConnectionCallback] = None,
+    ) -> None:
+        """Register one or more callbacks.
+
+        Passing ``None`` for a callback keeps its current value.
+        """
+        if on_key_press is not None:
+            self.on_key_press = on_key_press
+        if on_key_release is not None:
+            self.on_key_release = on_key_release
+        if on_connect is not None:
+            self.on_connect = on_connect
+        if on_disconnect is not None:
+            self.on_disconnect = on_disconnect
+
+    def clear_callbacks(self) -> None:
+        """Clear all registered callbacks."""
+        self.on_key_press = None
+        self.on_key_release = None
+        self.on_connect = None
+        self.on_disconnect = None
 
     def _handle_write(self, data: bytes) -> None:
         """Process raw bytes from GATT write into key events.
@@ -192,12 +272,12 @@ class KeyReceiver:
         """
         try:
             while True:
-                await asyncio.sleep(1.0)
+                await asyncio.sleep(self._config.timeout_check_interval_sec)
                 with self._conn_lock:
                     if not self._connected:
                         continue
                     elapsed = time.monotonic() - self._last_receive_time
-                    if elapsed > DISCONNECT_TIMEOUT_SEC:
+                    if elapsed > self._config.disconnect_timeout_sec:
                         self._connected = False
                         should_notify = True
                     else:

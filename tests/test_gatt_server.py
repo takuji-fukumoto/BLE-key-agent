@@ -63,6 +63,24 @@ class TestGATTServerInit:
         assert server._on_connect is on_connect
         assert server._on_disconnect is on_disconnect
 
+    def test_set_write_handler_updates_callback(self) -> None:
+        """set_write_handler should replace callback."""
+        server = GATTServer()
+        callback = MagicMock()
+
+        server.set_write_handler(callback)
+
+        assert server.on_write is callback
+
+    def test_set_write_handler_none_clears_callback(self) -> None:
+        """set_write_handler(None) should clear callback."""
+        callback = MagicMock()
+        server = GATTServer(on_write=callback)
+
+        server.set_write_handler(None)
+
+        assert server.on_write is None
+
 
 class TestGATTServerStart:
     """Tests for GATTServer start."""

@@ -7,7 +7,8 @@
 │                    Mac (BLE Central)                        │
 │                                                             │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────────┐  │
-│  │  Flet GUI    │  │  KeyMonitor  │  │  BLE Client      │  │
+│  │  CLI /       │  │  KeyMonitor  │  │  BLE Client      │  │
+│  │  External UI │  │  (pynput)    │  │  (bleak)         │  │
 │  │              │  │  (pynput)    │  │  (bleak)         │  │
 │  │ - 接続状態    │  │              │  │                  │  │
 │  │ - デバイス選択 │  │  Thread      │  │  async           │  │
@@ -64,16 +65,14 @@ BLE-key-agent/
 │   │   ├── uuids.py              # UUID定数 (poc/ble_gatt/common.py から移行)
 │   │   └── protocol.py           # キーデータフォーマット定義
 │   │
-│   ├── mac_agent/                 # Mac側エージェントアプリ
+│   ├── mac_agent/                 # Mac側送信ライブラリ/CLI
 │   │   ├── __init__.py
-│   │   ├── main.py               # エントリポイント (Fletアプリ起動)
-│   │   ├── app.py                # Fletアプリ本体
+│   │   ├── main.py               # エントリポイント (CLI)
+│   │   ├── agent.py              # 高レベル統合API
+│   │   ├── api_types.py          # 公開設定/コールバック型
 │   │   ├── ble_client.py         # BLE Central管理 (bleak)
 │   │   ├── key_monitor.py        # キー入力監視 (pynput)
-│   │   ├── views/                # GUI画面
-│   │   │   ├── __init__.py
-│   │   │   ├── main_view.py      # メイン画面
-│   │   │   └── device_list.py    # デバイス一覧
+│   │   ├── keyboard_monitor.py   # ライブラリ向け入力監視ラッパー
 │   │   └── requirements.txt
 │   │
 │   └── raspi_receiver/            # Raspberry Pi側ライブラリ + アプリ
@@ -106,8 +105,8 @@ common/protocol       ←── mac_agent/key_monitor
                       ←── raspi_receiver/lib/key_receiver
 
 mac_agent/key_monitor ──▶ mac_agent/app (asyncio.Queue経由)
-mac_agent/ble_client  ──▶ mac_agent/app (接続状態管理)
-mac_agent/app         ──▶ mac_agent/views/* (GUI描画)
+mac_agent/ble_client  ──▶ mac_agent/agent (接続状態管理)
+mac_agent/agent       ──▶ external GUI/CLI (別リポジトリUI連携)
 
 raspi_receiver/lib/gatt_server   ──▶ raspi_receiver/lib/key_receiver
 raspi_receiver/lib/key_receiver  ──▶ raspi_receiver/apps/* (callback)
@@ -126,11 +125,12 @@ raspi_receiver/lib/key_receiver  ──▶ raspi_receiver/apps/* (callback)
 
 | モジュール | 責務 |
 |---|---|
-| `main.py` | エントリポイント、Fletアプリ起動 |
-| `app.py` | アプリ全体のライフサイクル管理、各モジュールの統合 |
+| `main.py` | エントリポイント（CLI） |
+| `agent.py` | アプリ全体のライフサイクル管理、各モジュールの統合 |
+| `api_types.py` | 設定・コールバック型の公開API |
 | `ble_client.py` | BLEスキャン、接続、キーデータ送信、再接続 |
 | `key_monitor.py` | pynputによるグローバルキー監視、KeyEvent生成 |
-| `views/` | Flet UI コンポーネント |
+| `keyboard_monitor.py` | キー監視のライブラリ向けラッパー |
 
 ### 4.3 raspi_receiver/lib/ （ライブラリ）
 
@@ -166,7 +166,7 @@ raspi_receiver/lib/key_receiver  ──▶ raspi_receiver/apps/* (callback)
 ## 6. 非同期処理モデル
 
 ### Mac側
-- **メインスレッド**: Flet UIイベントループ
+- **メインスレッド**: CLI/外部アプリのイベントループ
 - **pynputスレッド**: キー監視（threading.Thread）
 - **asyncioイベントループ**: BLE通信、キューからの読み取り
 - スレッド間通信: `asyncio.Queue` + `call_soon_threadsafe`

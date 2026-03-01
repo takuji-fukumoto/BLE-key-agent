@@ -58,6 +58,18 @@ class TestBleClientInit:
 
         assert client.connected_device is None
 
+    def test_custom_reconnect_config(self) -> None:
+        """Test custom reconnect configuration is stored."""
+        client = BleClient(
+            reconnect_initial_delay=0.5,
+            reconnect_max_delay=30.0,
+            reconnect_backoff_multiplier=3.0,
+        )
+
+        assert client._reconnect_initial_delay == 0.5
+        assert client._reconnect_max_delay == 30.0
+        assert client._reconnect_backoff_multiplier == 3.0
+
 
 class TestBleDeviceDataclass:
     """Tests for BleDevice dataclass."""
@@ -368,6 +380,10 @@ class TestBleClientReconnection:
             mock_loop.return_value = mock_event_loop
 
             client._on_disconnect(mock_client)
+
+            # Close created coroutine to avoid unawaited coroutine warning.
+            reconnect_coro = mock_event_loop.create_task.call_args.args[0]
+            reconnect_coro.close()
 
         assert client._reconnect_task is mock_task
         mock_event_loop.create_task.assert_called_once()

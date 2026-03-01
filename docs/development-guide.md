@@ -16,7 +16,7 @@ Phase 3: Pi側LCD表示アプリ (raspi_receiver/apps/lcd_display/)
     ↓
 Phase 4: Mac側コア (mac_agent/ - BLE + KeyMonitor)
     ↓
-Phase 5: Mac側GUI (mac_agent/views/ - Flet)
+Phase 5: 外部GUI/利用アプリ連携（別リポジトリ）
     ↓
 Phase 6: 結合テスト・調整
 ```
@@ -71,12 +71,12 @@ Phase 6: 結合テスト・調整
 - キー入力がBLE経由でPiに到達する（CUI確認可）
 - 再接続が動作する
 
-### Phase 5: Mac側GUI
+### Phase 5: 外部GUI/利用アプリ連携
 
 **参照**: [spec-mac-agent.md](spec-mac-agent.md) §2, §3
 
-- `src/mac_agent/app.py`: アプリ統合
-- `src/mac_agent/views/`: Flet UIコンポーネント
+- `src/mac_agent/`: 公開API（`KeyBleAgent`, `BleSender`, `KeyboardMonitor`）
+- 外部リポジトリ: GUI層/利用アプリ実装
 
 **完了条件:**
 - GUI上でデバイススキャン・接続・切断が可能
@@ -134,5 +134,5 @@ Phase 6: 結合テスト・調整
 - **blessを使用する**: Pi側のBLEサーバーはblessライブラリを使う（D-Bus直接操作は不要）
 - **Write Without Response優先**: 低レイテンシのためWriteよりWrite Without Responseを優先
 - **pynputのスレッド**: pynputは別スレッドで動作する。asyncio.Queueでイベントループに橋渡しする
-- **Fletの非同期**: Fletは独自のイベントループを持つ。asyncio統合の方法をFletドキュメントで確認すること
+- **外部GUI連携**: 本リポジトリはGUIを持たない。GUI側では `mac_agent` 公開APIを呼び出して統合する
 - **LCD描画のブロッキング**: SPI通信は同期的。長時間ブロックしないよう描画頻度を制御する

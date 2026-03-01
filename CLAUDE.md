@@ -3,7 +3,7 @@
 ## プロジェクト概要
 
 macのキー入力をBLE GATT通信でRaspberry Piに送信するシステム。
-Mac側はFlet GUIアプリ、Pi側はライブラリ+LCDアプリ。
+このリポジトリはMac/Piの通信ライブラリ提供を主目的とし、GUIアプリは別リポジトリで実装する。
 
 ## ドキュメント参照ルール
 
@@ -28,8 +28,7 @@ Mac側はFlet GUIアプリ、Pi側はライブラリ+LCDアプリ。
 ```
 src/
 ├── common/           # Mac/Pi共有（UUID, プロトコル）
-├── mac_agent/        # Mac側Fletエージェントアプリ
-│   └── views/        # Flet UIコンポーネント
+├── mac_agent/        # Mac側送信ライブラリ/CLI
 └── raspi_receiver/   # Pi側
     ├── lib/          # ライブラリ（再利用可能）
     └── apps/         # アプリケーション実装
@@ -41,7 +40,7 @@ src/
 
 ## 技術スタック
 
-- **Mac**: bleak (BLE), pynput (キー監視), flet (GUI), asyncio
+- **Mac**: bleak (BLE), pynput (キー監視), asyncio
 - **Pi**: bless (BLE GATT Server), Pillow/spidev/gpiozero (LCD)
 - **共通**: Python 3.10+, pytest
 
@@ -74,5 +73,5 @@ src/
 2. raspi_receiver/lib/ (BLEサーバー, キー受信)
 3. raspi_receiver/apps/lcd_display/ (LCD表示)
 4. mac_agent/ コア (BLE + キー監視)
-5. mac_agent/views/ (Flet GUI)
+5. 外部GUI/利用アプリへの統合（別リポジトリ）
 6. 結合テスト

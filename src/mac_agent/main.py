@@ -23,11 +23,11 @@ import asyncio
 import logging
 import signal
 import sys
-import time
 
-from mac_agent.ble_client import BleClient, BleStatus
-from mac_agent.key_monitor import KeyMonitor
-from common.protocol import KeyEvent
+from common.protocol import KeyEvent, KeyType
+from mac_agent import AgentConfig, KeyBleAgent
+from mac_agent.ble_client import BleStatus
+from mac_agent.keyboard_monitor import KeyboardMonitor
 
 logging.basicConfig(
     level=logging.INFO,
@@ -35,16 +35,6 @@ logging.basicConfig(
     datefmt="%H:%M:%S",
 )
 logger = logging.getLogger(__name__)
-
-# Heartbeat interval in seconds. Pi-side timeout (10s) should be >= 3x this.
-HEARTBEAT_INTERVAL_SEC: float = 3.0
-
-# Minimum interval between BLE writes to prevent overwhelming the Pi.
-MIN_SEND_INTERVAL_S: float = 0.005  # 5ms
-
-# Maximum pending key events on the Mac side (backpressure).
-MAC_KEY_QUEUE_MAX_SIZE: int = 256
-
 
 class MacAgent:
     """Mac agent application orchestrator.
@@ -54,17 +44,34 @@ class MacAgent:
 
     def __init__(self, device_name: str | None = None) -> None:
         self._device_name = device_name
-        self._key_queue: asyncio.Queue[KeyEvent | None] = asyncio.Queue(
-            maxsize=MAC_KEY_QUEUE_MAX_SIZE
+        self._agent = KeyBleAgent(
+            config=AgentConfig(
+                device_name=device_name or "RasPi-KeyAgent",
+            ),
+            on_status_change=self._on_ble_status_change,
+            on_error=self._on_error,
+            on_key_event=self._on_key_event,
         )
-        self._ble_client = BleClient(on_status_change=self._on_ble_status_change)
-        self._key_monitor = KeyMonitor(self._key_queue)
         self._shutdown_event = asyncio.Event()
-        self._last_send_time: float = 0.0
 
     def _on_ble_status_change(self, status: BleStatus) -> None:
         """Handle BLE connection status changes."""
         logger.info("BLE status: %s", status)
+
+    def _on_error(self, error: Exception) -> None:
+        """Handle internal runtime errors from KeyBleAgent."""
+        logger.exception("Agent runtime error: %s", error)
+
+    def _on_key_event(self, event: KeyEvent) -> None:
+        """Handle consumed key events.
+
+        Pressing Esc (or Escape) triggers graceful shutdown for CLI parity
+        with previous behavior.
+        """
+        if event.press and event.key_type == KeyType.SPECIAL:
+            if event.value in {"esc", "escape"}:
+                logger.info("Esc pressed, stopping...")
+                self._shutdown_event.set()
 
     async def run(self) -> None:
         """Start the agent and run until shutdown."""
@@ -78,19 +85,15 @@ class MacAgent:
             # Scan and connect to BLE device
             await self._connect()
 
-            if self._ble_client.status != BleStatus.CONNECTED:
+            if self._agent.status != BleStatus.CONNECTED:
                 logger.error("Failed to connect to BLE device")
                 return
 
-            # Start key monitoring
-            await self._key_monitor.start()
+            # Start high-level agent (keyboard monitor + forward + heartbeat)
+            await self._agent.start()
             logger.info("Key monitoring started (press Esc to stop)")
 
-            # Run key forwarding and heartbeat in parallel
-            await asyncio.gather(
-                self._forward_loop(),
-                self._heartbeat_loop(),
-            )
+            await self._shutdown_event.wait()
 
         finally:
             await self._cleanup()
@@ -104,18 +107,18 @@ class MacAgent:
         if self._device_name:
             # Direct connection by name
             print(f"Connecting to '{self._device_name}'...")
-            devices = await self._ble_client.scan(timeout=10.0)
+            devices = await self._agent.scan(timeout=10.0)
             target = next(
                 (d for d in devices if d.name == self._device_name), None
             )
             if target:
-                await self._ble_client.connect(target.address)
+                await self._agent.connect(target.address)
             else:
                 logger.error(f"Device '{self._device_name}' not found")
         else:
             # Interactive selection
             print("Scanning for BLE devices...")
-            devices = await self._ble_client.scan(timeout=10.0)
+            devices = await self._agent.scan(timeout=10.0)
 
             if not devices:
                 print("No devices found.")
@@ -135,64 +138,9 @@ class MacAgent:
                 idx = int(choice) - 1
                 if 0 <= idx < len(devices):
                     print(f"\nConnecting to {devices[idx].name}...")
-                    await self._ble_client.connect(devices[idx].address)
+                    await self._agent.connect(devices[idx].address)
             except (ValueError, IndexError):
                 print("Invalid selection")
-
-    async def _forward_loop(self) -> None:
-        """Forward key events from monitor to BLE client."""
-        print("\n" + "-" * 50)
-        print("Transmitting key input to Raspberry Pi...")
-        print("Press Esc to stop.")
-        print("-" * 50 + "\n")
-
-        while not self._shutdown_event.is_set():
-            try:
-                # Get key event with timeout to check shutdown flag
-                event = await asyncio.wait_for(
-                    self._key_queue.get(), timeout=0.5
-                )
-            except asyncio.TimeoutError:
-                continue
-
-            if event is None:
-                # Stop signal from KeyMonitor (Esc pressed)
-                logger.info("Esc pressed, stopping...")
-                self._shutdown_event.set()
-                break
-
-            # Rate limiting: enforce minimum interval between sends
-            now = time.monotonic()
-            elapsed = now - self._last_send_time
-            if elapsed < MIN_SEND_INTERVAL_S:
-                await asyncio.sleep(MIN_SEND_INTERVAL_S - elapsed)
-
-            # Send via BLE
-            if self._ble_client.status == BleStatus.CONNECTED:
-                await self._ble_client.send_key(event)
-                self._last_send_time = time.monotonic()
-                # Log key press only
-                if event.press:
-                    logger.debug(f"Sent: {event}")
-
-    async def _heartbeat_loop(self) -> None:
-        """Send periodic heartbeat while connected.
-
-        Skips sending if a key event was sent recently (within the
-        heartbeat interval) to avoid unnecessary BLE traffic.
-        """
-        while not self._shutdown_event.is_set():
-            await asyncio.sleep(HEARTBEAT_INTERVAL_SEC)
-            if self._shutdown_event.is_set():
-                break
-            # Skip if we sent data recently
-            elapsed = time.monotonic() - self._last_send_time
-            if elapsed < HEARTBEAT_INTERVAL_SEC:
-                continue
-            if self._ble_client.status == BleStatus.CONNECTED:
-                await self._ble_client.send_key(KeyEvent.heartbeat())
-                self._last_send_time = time.monotonic()
-                logger.debug("Heartbeat sent")
 
     def _signal_shutdown(self) -> None:
         """Handle shutdown signal."""
@@ -201,8 +149,7 @@ class MacAgent:
 
     async def _cleanup(self) -> None:
         """Clean up resources."""
-        await self._key_monitor.stop()
-        await self._ble_client.disconnect()
+        await self._agent.stop()
         print("\nDisconnected. Goodbye!")
 
 
@@ -218,14 +165,11 @@ def main() -> None:
     args = parser.parse_args()
 
     # Check accessibility (macOS)
-    if sys.platform == "darwin":
-        from pynput import keyboard
-        if hasattr(keyboard.Listener, 'IS_TRUSTED'):
-            if not keyboard.Listener.IS_TRUSTED:
-                print("\n⚠️  権限が不足している可能性があります")
-                print("   システム設定 → プライバシーとセキュリティ で")
-                print("   ・アクセシビリティ → ターミナル/IDE を許可")
-                print("   ・入力監視 → ターミナル/IDE を許可\n")
+    if sys.platform == "darwin" and not KeyboardMonitor.check_accessibility():
+        print("\n⚠️  権限が不足している可能性があります")
+        print("   システム設定 → プライバシーとセキュリティ で")
+        print("   ・アクセシビリティ → ターミナル/IDE を許可")
+        print("   ・入力監視 → ターミナル/IDE を許可\n")
 
     agent = MacAgent(device_name=args.device)
     asyncio.run(agent.run())
