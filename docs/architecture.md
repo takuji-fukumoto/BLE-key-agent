@@ -56,8 +56,8 @@ BLE-key-agent/
 ├── CLAUDE.md                      # AI開発ルール
 ├── docs/                          # 仕様書
 ├── reports/                       # 技術調査レポート
-├── example/                       # ハードウェアサンプル
 ├── poc/                           # PoC実装（既存）
+├── reports/                       # 技術調査・参照コード
 │
 ├── src/                           # 本実装
 │   ├── common/                    # Mac/Pi共有定義

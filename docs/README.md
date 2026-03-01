@@ -17,7 +17,7 @@ macのキー入力をBLE GATT通信でRaspberry Piに送信するシステムの
 
 - [reports/ble_gatt_key_transmission.md](../reports/ble_gatt_key_transmission.md) - BLE GATT通信の技術調査
 - [reports/pynput_key_monitoring.md](../reports/pynput_key_monitoring.md) - pynputキー監視の技術調査
-- [example/1.3inch_LCD_HAT_python/](../example/1.3inch_LCD_HAT_python/) - LCD HAT表示サンプル
+- [reports/1.3inch_LCD_HAT_python/](../reports/1.3inch_LCD_HAT_python/) - LCD HAT表示サンプル
 
 ## PoCコード
 

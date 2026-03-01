@@ -26,7 +26,7 @@
 - `src/mac_agent/`: Mac 側実装
 - `src/raspi_receiver/lib/`: Pi 側ライブラリ（BLE 通信 + キー受信 hook）
 - `sample/raspi_receiver/apps/`: Pi 側サンプルアプリ実装（LCD 等ハードウェア依存）
-- `poc/`, `example/`, `reports/` は参照用。原則直接変更しない
+- `poc/`, `reports/` は参照用。原則直接変更しない
 
 ## コーディング規約
 

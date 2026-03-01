@@ -4,7 +4,7 @@ Centralizes GPIO pin definitions, display parameters, font paths,
 layout coordinates, color palette, and timing constants.
 
 Hardware: 1.3inch LCD HAT (ST7789, 240x240, SPI)
-Reference: example/1.3inch_LCD_HAT_python/config.py
+Reference: reports/1.3inch_LCD_HAT_python/config.py
 """
 
 from __future__ import annotations
@@ -32,8 +32,8 @@ BACKLIGHT_LEVELS: list[int] = [0, 25, 50, 75, 100]
 
 # --- Font Configuration ---
 
-_PROJECT_ROOT = Path(__file__).resolve().parents[4]  # src/../../../..
-FONT_DIR: Path = _PROJECT_ROOT / "example" / "1.3inch_LCD_HAT_python" / "Font"
+_PROJECT_ROOT = Path(__file__).resolve().parents[4]  # sample/../../../..
+FONT_DIR: Path = _PROJECT_ROOT / "reports" / "1.3inch_LCD_HAT_python" / "Font"
 FONT_DEFAULT: str = str(FONT_DIR / "Font01.ttf")
 
 # Font sizes

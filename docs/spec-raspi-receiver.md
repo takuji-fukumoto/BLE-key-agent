@@ -173,7 +173,7 @@ LCD HAT 240x240 ピクセルに以下を表示:
 
 ### 4.3 ハードウェア構成
 
-`example/1.3inch_LCD_HAT_python/` のドライバとconfigを利用。
+`reports/1.3inch_LCD_HAT_python/` のドライバとconfigを利用。
 
 | コンポーネント | 仕様 |
 |---|---|

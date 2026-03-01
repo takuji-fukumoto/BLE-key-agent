@@ -112,7 +112,7 @@ def _render_worker(conn: Connection, spi_speed: int) -> None:
     # Add LCD HAT driver directory to sys.path
     driver_dir = str(
         Path(__file__).resolve().parents[4]
-        / "example"
+        / "reports"
         / "1.3inch_LCD_HAT_python"
     )
     if driver_dir not in sys.path:
