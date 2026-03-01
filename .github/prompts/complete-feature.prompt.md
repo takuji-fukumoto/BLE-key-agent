@@ -45,6 +45,20 @@
 - `## 変更予定` を `## 変更内容` に更新
 - チェックリストにチェック
 - 必要に応じて Draft を解除
+- PR本文は **heredoc ではなく** 一時ファイル経由で更新する
+
+推奨コマンド例:
+
+```bash
+# 1) 本文ファイルを作成（内容はエディタで編集）
+cp plan/pr_template.md plan/pr_update.md 2>/dev/null || touch plan/pr_update.md
+
+# 2) PR番号を指定して本文更新
+gh pr edit <PR番号> --body-file plan/pr_update.md
+
+# 3) 必要に応じてDraft解除
+gh pr ready <PR番号>
+```
 
 ### Step 5: 完了報告
 
