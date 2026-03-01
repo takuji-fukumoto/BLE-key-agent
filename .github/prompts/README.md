@@ -12,6 +12,19 @@
    - `create-skill.prompt.md`
 3. 引数が必要なものは、実行時メッセージ内の `<...>` を具体値に置き換える
 
+### complete-feature のタグ自動化
+
+- `complete-feature.prompt.md` 実行時に、実行メッセージへ「タグプッシュして」「tag push」などを含めると、
+   `scripts/create_and_push_date_tag.sh` を使って `vYYYYMMDD.N` 形式タグを自動採番して push する。
+- 指示がない場合はタグ作成を行わない。
+
+### complete-feature のRelease公開自動化
+
+- 実行メッセージへ「リリースノート作成して公開して」「release publish」などを含めると、
+   `scripts/create_and_push_date_tag.sh --publish-release` を使ってタグ push 後に
+   GitHub Release（自動生成ノート付き）を公開する。
+- 指示がない場合はRelease公開を行わない。
+
 ## 注意点
 
 - これは `/.claude` のスラッシュコマンド定義の代替テンプレートであり、完全な 1:1 実行環境ではない
