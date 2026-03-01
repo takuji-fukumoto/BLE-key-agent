@@ -49,18 +49,24 @@ Mac のキー入力を BLE GATT 通信で Raspberry Pi に送信し、LCD に表
 BLE-key-agent/
 ├── scripts/                       # スクリプト
 │   ├── setup_mac.sh              #   Mac 用セットアップ
-│   ├── setup_raspi.sh            #   Raspberry Pi 用セットアップ
-│   ├── run_mac.sh                #   Mac エージェント起動
-│   └── run_raspi.sh              #   Pi LCD アプリ起動
-├── src/                           # メインアプリケーション
+│   ├── setup_raspi.sh            #   Raspberry Pi 用（ライブラリ最小）セットアップ
+│   └── run_mac.sh                #   Mac エージェント起動
+├── sample/                        # サンプル実装
+│   ├── scripts/
+│   │   ├── setup_raspi_sample.sh #   Pi LCD サンプル追加セットアップ
+│   │   ├── run_raspi.sh          #   Pi LCD サンプル起動
+│   │   └── run_raspi_loop.sh     #   Pi LCD サンプル自動再起動
+│   └── raspi_receiver/apps/      #   Pi サンプルアプリ
+│       ├── cli_receiver/
+│       └── lcd_display/
+├── src/                           # ライブラリ実装
 │   ├── common/                   #   Mac/Pi 共有定義（UUID, プロトコル）
 │   ├── mac_agent/                #   Mac 側エージェント
 │   │   ├── main.py               #     エントリポイント
 │   │   ├── ble_client.py         #     BLE Central クライアント
 │   │   └── key_monitor.py        #     キー入力監視
-│   └── raspi_receiver/           #   Raspberry Pi 側
-│       ├── lib/                  #     BLE 受信ライブラリ
-│       └── apps/lcd_display/     #     LCD 表示アプリ
+│   └── raspi_receiver/           #   Raspberry Pi 側ライブラリ
+│       └── lib/                  #     BLE 受信ライブラリ
 ├── poc/                           # PoC 実装（技術検証用）
 ├── docs/                          # 仕様書
 ├── reports/                       # 技術調査レポート
@@ -106,11 +112,15 @@ pip3 install --user bleak>=0.21.0 pynput>=1.7.6
 git clone https://github.com/takuji-fukumoto/BLE-key-agent.git
 cd BLE-key-agent
 
-# 2. セットアップスクリプトの実行（sudo 必要）
+# 2. ライブラリ最小セットアップ（sudo 必要）
 chmod +x scripts/setup_raspi.sh
 sudo ./scripts/setup_raspi.sh
 
-# 3. SPI/GPIO 設定変更時は再起動
+# 3. LCDサンプルも使う場合のみ追加セットアップ
+chmod +x sample/scripts/setup_raspi_sample.sh
+sudo ./sample/scripts/setup_raspi_sample.sh
+
+# 4. SPI/GPIO 設定変更時は再起動
 sudo reboot
 ```
 
@@ -128,7 +138,7 @@ Pi 側を先に起動し、BLE アドバタイズを開始。
 
 ```bash
 cd BLE-key-agent
-sudo ./scripts/run_raspi.sh
+sudo ./sample/scripts/run_raspi.sh
 ```
 
 起動すると `RasPi-KeyAgent` としてアドバタイズが開始され、LCD に接続待ち画面が表示される。
@@ -234,7 +244,7 @@ asyncio.run(main())
 **CLIサンプル**
 
 ```bash
-PYTHONPATH=src python -m raspi_receiver.apps.cli_receiver.main
+PYTHONPATH=src python -m sample.raspi_receiver.apps.cli_receiver.main
 ```
 
 利用可能オプション:
@@ -248,7 +258,7 @@ PYTHONPATH=src python -m raspi_receiver.apps.cli_receiver.main
 ```bash
 pip3 install --user pytest pytest-asyncio
 cd BLE-key-agent
-PYTHONPATH=src pytest tests/
+PYTHONPATH=src:sample pytest tests/
 ```
 
 ## トラブルシューティング

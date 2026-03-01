@@ -5,21 +5,21 @@
 # BLE で Mac からのキー入力を受信し、LCD に表示する
 #
 # 使用方法:
-#   ./scripts/run_raspi.sh [--debug] [--log-dir DIR] [--spi-speed HZ]
+#   ./sample/scripts/run_raspi.sh [--debug] [--log-dir DIR] [--spi-speed HZ]
 #
 # オプション:
 #   --debug       DEBUG レベルのログをコンソールに出力
 #   --log-dir     ログファイルの出力先ディレクトリ (デフォルト: logs/)
 #   --spi-speed   SPI バス速度 (Hz, デフォルト: 20000000)
 #
-# ※ 事前に setup_raspi.sh で権限設定済みであること
+# ※ 事前に sample/scripts/setup_raspi_sample.sh で権限設定済みであること
 #   （BLE ケーパビリティ + bluetooth/spi/gpio グループ）
 #
 
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 cd "$PROJECT_ROOT"
 
@@ -81,4 +81,4 @@ echo "終了するには Ctrl+C を押してください"
 echo "=========================================="
 echo ""
 
-PYTHONPATH=src "$PYTHON" -m raspi_receiver.apps.lcd_display.main "$@"
+PYTHONPATH=src "$PYTHON" -m sample.raspi_receiver.apps.lcd_display.main "$@"

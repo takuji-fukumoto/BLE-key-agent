@@ -12,7 +12,7 @@ Phase 1: 共通定義 (common/)
     ↓
 Phase 2: Pi側ライブラリ (raspi_receiver/lib/)
     ↓
-Phase 3: Pi側LCD表示アプリ (raspi_receiver/apps/lcd_display/)
+Phase 3: Pi側LCD表示アプリ (sample/raspi_receiver/apps/lcd_display/)
     ↓
 Phase 4: Mac側コア (mac_agent/ - BLE + KeyMonitor)
     ↓
@@ -51,8 +51,8 @@ Phase 6: 結合テスト・調整
 
 **参照**: [spec-raspi-receiver.md](spec-raspi-receiver.md) §4
 
-- `src/raspi_receiver/apps/lcd_display/`
-- `example/1.3inch_LCD_HAT_python/` のドライバを参照
+- `sample/raspi_receiver/apps/lcd_display/`
+- `reports/1.3inch_LCD_HAT_python/` のドライバを参照
 
 **完了条件:**
 - 受信キーがLCDに表示される
@@ -108,10 +108,10 @@ Phase 6: 結合テスト・調整
 |---|---|
 | BLE GATT全般 | `reports/ble_gatt_key_transmission.md` |
 | pynput全般 | `reports/pynput_key_monitoring.md` |
-| bleak詳細 | `example/ble_gatt_bleak_research.md` |
-| BlueZ/D-Bus | `example/raspi_bluez_gatt_server_research.md` |
-| pynput+BLE統合 | `example/pynputと_gatt通信によるキー送信方法.md` |
-| LCD HAT | `example/1.3inch_LCD_HAT_python/` |
+| bleak詳細 | `reports/ble_gatt_bleak_research.md` |
+| BlueZ/D-Bus | `reports/raspi_bluez_gatt_server_research.md` |
+| pynput+BLE統合 | `reports/pynputと_gatt通信によるキー送信方法.md` |
+| LCD HAT | `reports/1.3inch_LCD_HAT_python/` |
 
 ## 4. コーディング規約
 

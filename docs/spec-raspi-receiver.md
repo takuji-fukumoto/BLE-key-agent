@@ -141,7 +141,7 @@ async def main():
 asyncio.run(main())
 ```
 
-## 4. LCD表示アプリ仕様 (`raspi_receiver/apps/lcd_display/`)
+## 4. LCD表示アプリ仕様 (`sample/raspi_receiver/apps/lcd_display/`)
 
 ### 4.1 画面レイアウト
 
@@ -173,7 +173,7 @@ LCD HAT 240x240 ピクセルに以下を表示:
 
 ### 4.3 ハードウェア構成
 
-`example/1.3inch_LCD_HAT_python/` のドライバとconfigを利用。
+`reports/1.3inch_LCD_HAT_python/` のドライバとconfigを利用。
 
 | コンポーネント | 仕様 |
 |---|---|
@@ -186,13 +186,16 @@ LCD HAT 240x240 ピクセルに以下を表示:
 
 ```bash
 # Raspberry Piの初期設定
-sudo ./setup_raspi.sh
+sudo ./scripts/setup_raspi.sh
+
+# LCD表示サンプルを使う場合のみ追加セットアップ
+sudo ./sample/scripts/setup_raspi_sample.sh
 
 # ライブラリと依存パッケージのインストール
 pip install -r requirements.txt
 
 # LCD表示アプリの起動
-python -m raspi_receiver.apps.lcd_display.main
+PYTHONPATH=src python -m sample.raspi_receiver.apps.lcd_display.main
 ```
 
 ## 6. ライブラリ設計方針

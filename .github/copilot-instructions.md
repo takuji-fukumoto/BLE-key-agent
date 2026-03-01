@@ -25,8 +25,8 @@
 - `src/common/`: Mac/Pi 共有（UUID, プロトコル）
 - `src/mac_agent/`: Mac 側実装
 - `src/raspi_receiver/lib/`: Pi 側ライブラリ（BLE 通信 + キー受信 hook）
-- `src/raspi_receiver/apps/`: Pi 側アプリ実装（LCD 等ハードウェア依存）
-- `poc/`, `example/`, `reports/` は参照用。原則直接変更しない
+- `sample/raspi_receiver/apps/`: Pi 側サンプルアプリ実装（LCD 等ハードウェア依存）
+- `poc/`, `reports/` は参照用。原則直接変更しない
 
 ## コーディング規約
 
@@ -54,7 +54,7 @@
 
 1. `common/`（UUID, プロトコル）
 2. `raspi_receiver/lib/`（BLE サーバー, キー受信）
-3. `raspi_receiver/apps/lcd_display/`（LCD 表示）
+3. `sample/raspi_receiver/apps/lcd_display/`（LCD 表示サンプル）
 4. `mac_agent/` コア（BLE + キー監視）
 5. 外部GUI/利用アプリへの統合（別リポジトリ）
 6. 結合テスト

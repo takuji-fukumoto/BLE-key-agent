@@ -25,14 +25,44 @@
 - 必要なドメイン知識ファイルも含める
 - リモートにプッシュ
 
+### Step 3.5: タグ作成・プッシュ（任意）
+
+- 実行メッセージに「タグプッシュして」「tag push」など**タグ作成の明示指示がある場合のみ**実施
+- タグ形式は `vYYYYMMDD.N`（`N` は当日連番 1 始まり）
+- 既存タグを取得後、当日タグの最大連番を +1 して採番する
+- `scripts/create_and_push_date_tag.sh` を使ってタグ作成・pushする
+- 明示指示がない場合はこのステップをスキップする
+
+### Step 3.6: リリースノート作成・公開（任意）
+
+- 実行メッセージに「リリースノート作成して公開して」「release publish」など**Release公開の明示指示がある場合のみ**実施
+- `scripts/create_and_push_date_tag.sh --publish-release` を使って、タグ push 後に GitHub Release を作成する
+- Releaseノートは GitHub の自動生成（`--generate-notes`）を使う
+- 明示指示がない場合はこのステップをスキップする
+
 ### Step 4: PR 更新
 
 - `## 変更予定` を `## 変更内容` に更新
 - チェックリストにチェック
 - 必要に応じて Draft を解除
+- PR本文は **heredoc ではなく** 一時ファイル経由で更新する
+
+推奨コマンド例:
+
+```bash
+# 1) 本文ファイルを作成（内容はエディタで編集）
+cp plan/pr_template.md plan/pr_update.md 2>/dev/null || touch plan/pr_update.md
+
+# 2) PR番号を指定して本文更新
+gh pr edit <PR番号> --body-file plan/pr_update.md
+
+# 3) 必要に応じてDraft解除
+gh pr ready <PR番号>
+```
 
 ### Step 5: 完了報告
 
 - コミット要約
 - PR URL
 - 作成したドメイン知識ファイル（あれば）
+- 作成/プッシュしたタグ（あれば）

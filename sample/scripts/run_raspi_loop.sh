@@ -6,10 +6,10 @@
 # SSH切断(SIGHUP)では停止しない。
 #
 # 使用方法:
-#   ./scripts/run_raspi_loop.sh [--debug] [--log-dir DIR] [--spi-speed HZ]
+#   ./sample/scripts/run_raspi_loop.sh [--debug] [--log-dir DIR] [--spi-speed HZ]
 #
 # バックグラウンド実行 (推奨):
-#   nohup ./scripts/run_raspi_loop.sh --debug > /tmp/ble-key-agent/loop.log 2>&1 &
+#   nohup ./sample/scripts/run_raspi_loop.sh --debug > /tmp/ble-key-agent/loop.log 2>&1 &
 #
 # 環境変数:
 #   RESTART_DELAY  再起動までの待機秒数 (デフォルト: 3)
@@ -21,7 +21,7 @@
 trap '' HUP
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 cd "$PROJECT_ROOT"
 
@@ -108,7 +108,7 @@ while true; do
     ensure_bluetooth_discoverable
     log_msg "アプリを起動します (restart #${restart_count})..."
 
-    PYTHONPATH=src "$PYTHON" -m raspi_receiver.apps.lcd_display.main "$@"
+    PYTHONPATH=src "$PYTHON" -m sample.raspi_receiver.apps.lcd_display.main "$@"
     exit_code=$?
 
     # Ctrl+C による終了

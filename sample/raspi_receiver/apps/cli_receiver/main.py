@@ -5,7 +5,7 @@ It builds a small text buffer from incoming key events and commits the
 buffer when Enter is pressed.
 
 Run with:
-    python -m raspi_receiver.apps.cli_receiver.main
+    python -m sample.raspi_receiver.apps.cli_receiver.main
 """
 
 from __future__ import annotations
