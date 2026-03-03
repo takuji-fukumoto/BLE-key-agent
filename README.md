@@ -54,11 +54,13 @@ BLE-key-agent/
 ├── sample/                        # サンプル実装
 │   ├── scripts/
 │   │   ├── setup_raspi_sample.sh #   Pi LCD サンプル追加セットアップ
+│   │   ├── setup_unihiker_sample.sh # UNIHIKER サンプルセットアップ
 │   │   ├── run_raspi.sh          #   Pi LCD サンプル起動
 │   │   └── run_raspi_loop.sh     #   Pi LCD サンプル自動再起動
 │   └── raspi_receiver/apps/      #   Pi サンプルアプリ
 │       ├── cli_receiver/
 │       └── lcd_display/
+│   └── unihiker_receiver/        #   UNIHIKER サンプルアプリ
 ├── src/                           # ライブラリ実装
 │   ├── common/                   #   Mac/Pi 共有定義（UUID, プロトコル）
 │   ├── mac_agent/                #   Mac 側エージェント
@@ -130,6 +132,23 @@ sudo apt install -y bluez python3-pip
 pip3 install --break-system-packages bless>=0.3.0 Pillow gpiozero spidev
 ```
 
+### UNIHIKER M10 側セットアップ
+
+```bash
+# 1. リポジトリのクローン
+git clone https://github.com/takuji-fukumoto/BLE-key-agent.git
+cd BLE-key-agent
+
+# 2. UNIHIKER サンプルセットアップ（sudo 必要）
+chmod +x sample/scripts/setup_unihiker_sample.sh
+sudo ./sample/scripts/setup_unihiker_sample.sh
+```
+
+**venv を使う場合:**
+```bash
+sudo ./sample/scripts/setup_unihiker_sample.sh --venv
+```
+
 ## 利用方法
 
 ### 1. Raspberry Pi 側（LCD 表示アプリ）
@@ -144,6 +163,15 @@ sudo ./sample/scripts/run_raspi.sh
 起動すると `RasPi-KeyAgent` としてアドバタイズが開始され、LCD に接続待ち画面が表示される。
 
 > **Note**: `sudo` は BLE アドバタイズと GPIO/SPI アクセスに必要
+
+### 1-b. UNIHIKER 側（Unihiker GUI サンプル）
+
+```bash
+cd BLE-key-agent
+python3 -m sample.unihiker_receiver.main
+```
+
+起動すると `RasPi-KeyAgent` としてアドバタイズを開始し、UNIHIKER 画面に接続状態・最新キー・入力バッファを表示する。
 
 ### 2. Mac 側（キー送信エージェント）
 
