@@ -139,7 +139,7 @@ if [ -z "$FOUND_PYTHON" ]; then
     echo ""
     echo "  2) Python 3.11 をインストール（プリビルド版: 推奨・高速）:"
     echo "    cd ~/.pyenv/versions/"
-    echo "    wget https://github.com/liliang9693/unihiker-pyenv-python/releases/download/v0.0.1/python-3.11.4.tar.gz"
+    echo "    wget https://github.com/liliang9693/unihiker-pyenv-python/releases/download/3.8-3.13/python-3.11.4.tar.gz"
     echo "    tar -xzf python-3.11.4.tar.gz"
     echo "    pyenv global 3.11.4"
     echo ""
