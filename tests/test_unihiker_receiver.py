@@ -7,8 +7,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from src.common.protocol import KeyEvent, KeyType, Modifiers
-from src.raspi_receiver.lib.types import ConnectionEvent
+from common.protocol import KeyEvent, KeyType, Modifiers
+from raspi_receiver.lib.types import ConnectionEvent
 from sample.unihiker_receiver.display import (
     UnihikerDisplayAdapter,
     UnihikerScreenState,

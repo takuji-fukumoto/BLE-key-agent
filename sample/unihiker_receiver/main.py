@@ -17,9 +17,9 @@ from dataclasses import dataclass
 from logging.handlers import RotatingFileHandler
 from typing import Union
 
-from src.common.protocol import KeyEvent
-from src.raspi_receiver.lib.key_receiver import KeyReceiver, KeyReceiverConfig
-from src.raspi_receiver.lib.types import ConnectionEvent
+from common.protocol import KeyEvent
+from raspi_receiver.lib.key_receiver import KeyReceiver, KeyReceiverConfig
+from raspi_receiver.lib.types import ConnectionEvent
 
 logger = logging.getLogger(__name__)
 

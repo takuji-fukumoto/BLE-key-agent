@@ -6,7 +6,7 @@ import importlib
 from dataclasses import dataclass
 from typing import Any
 
-from src.common.protocol import KeyEvent, KeyType, Modifiers
+from common.protocol import KeyEvent, KeyType, Modifiers
 
 from .config import BUFFER_VISIBLE_CHARS, INPUT_BUFFER_MAX_LENGTH, LAYOUT
 
