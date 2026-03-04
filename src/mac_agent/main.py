@@ -24,7 +24,7 @@ import logging
 import signal
 import sys
 
-from common.protocol import KeyEvent, KeyType
+from common.protocol import KeyEvent
 from mac_agent import AgentConfig, KeyBleAgent
 from mac_agent.ble_client import BleStatus
 from mac_agent.keyboard_monitor import KeyboardMonitor
@@ -62,16 +62,8 @@ class MacAgent:
         """Handle internal runtime errors from KeyBleAgent."""
         logger.exception("Agent runtime error: %s", error)
 
-    def _on_key_event(self, event: KeyEvent) -> None:
-        """Handle consumed key events.
-
-        Pressing Esc (or Escape) triggers graceful shutdown for CLI parity
-        with previous behavior.
-        """
-        if event.press and event.key_type == KeyType.SPECIAL:
-            if event.value in {"esc", "escape"}:
-                logger.info("Esc pressed, stopping...")
-                self._shutdown_event.set()
+    def _on_key_event(self, _event: KeyEvent) -> None:
+        """Handle consumed key events."""
 
     async def run(self) -> None:
         """Start the agent and run until shutdown."""
@@ -91,7 +83,7 @@ class MacAgent:
 
             # Start high-level agent (keyboard monitor + forward + heartbeat)
             await self._agent.start()
-            logger.info("Key monitoring started (press Esc to stop)")
+            logger.info("Key monitoring started (press Ctrl+C to stop)")
 
             await self._shutdown_event.wait()
 
