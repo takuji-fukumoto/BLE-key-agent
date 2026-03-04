@@ -9,13 +9,19 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import logging
+import os
 import signal
+import sys
 from dataclasses import dataclass
+from logging.handlers import RotatingFileHandler
 from typing import Union
 
 from src.common.protocol import KeyEvent
 from src.raspi_receiver.lib.key_receiver import KeyReceiver, KeyReceiverConfig
 from src.raspi_receiver.lib.types import ConnectionEvent
+
+logger = logging.getLogger(__name__)
 
 from .config import EVENT_QUEUE_MAX_SIZE, RENDER_INTERVAL_MS
 from .display import UnihikerDisplayAdapter
@@ -72,9 +78,15 @@ class UnihikerReceiverApp:
         """Run the app lifecycle until shutdown signal."""
         self._loop = asyncio.get_running_loop()
 
+        logger.info("Initializing display...")
         self._display.init()
+        logger.info("Display initialized")
+
         self._register_callbacks()
+
+        logger.info("Starting BLE receiver...")
         await self._receiver.start()
+        logger.info("BLE receiver started, waiting for connections...")
 
         for sig in (signal.SIGINT, signal.SIGTERM):
             self._loop.add_signal_handler(sig, self._signal_shutdown)
@@ -209,12 +221,52 @@ def parse_args() -> argparse.Namespace:
         default=RENDER_INTERVAL_MS,
         help="Render interval in milliseconds",
     )
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Enable DEBUG level logging on console",
+    )
+    parser.add_argument(
+        "--log-dir",
+        default="/tmp/ble-key-agent",
+        help="Directory for log files (default: /tmp/ble-key-agent)",
+    )
     return parser.parse_args()
 
 
-async def _run_async() -> None:
+def _setup_logging(debug: bool, log_dir: str) -> str:
+    """Configure logging with console and file handlers.
+
+    Args:
+        debug: If True, set console log level to DEBUG.
+        log_dir: Directory for log files.
+
+    Returns:
+        Path to the log file.
+    """
+    log_format = "%(asctime)s [%(name)s] %(levelname)s: %(message)s"
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.DEBUG)
+
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.DEBUG if debug else logging.INFO)
+    console_handler.setFormatter(logging.Formatter(log_format))
+    root_logger.addHandler(console_handler)
+
+    os.makedirs(log_dir, exist_ok=True)
+    log_file = os.path.join(log_dir, "unihiker_receiver.log")
+    file_handler = RotatingFileHandler(
+        log_file, maxBytes=150 * 1024, backupCount=3
+    )
+    file_handler.setLevel(logging.DEBUG if debug else logging.INFO)
+    file_handler.setFormatter(logging.Formatter(log_format))
+    root_logger.addHandler(file_handler)
+
+    return log_file
+
+
+async def _run_async(args: argparse.Namespace) -> None:
     """Run app asynchronously with parsed CLI options."""
-    args = parse_args()
     app = UnihikerReceiverApp(
         device_name=args.device_name,
         render_interval_ms=args.render_interval_ms,
@@ -224,7 +276,17 @@ async def _run_async() -> None:
 
 def main() -> None:
     """Program entry point."""
-    asyncio.run(_run_async())
+    args = parse_args()
+    log_file = _setup_logging(debug=args.debug, log_dir=args.log_dir)
+    logger.info("Log file: %s", log_file)
+
+    try:
+        asyncio.run(_run_async(args))
+    except KeyboardInterrupt:
+        pass
+    except Exception:
+        logger.critical("FATAL CRASH:", exc_info=True)
+        sys.exit(1)
 
 
 if __name__ == "__main__":
