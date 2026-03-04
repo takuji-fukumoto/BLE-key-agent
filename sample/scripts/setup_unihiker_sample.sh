@@ -24,7 +24,7 @@ while [ $# -gt 0 ]; do
     case "$1" in
         --venv)
             USE_VENV=true
-            if [ -n "$2" ] && [ "${2:0:1}" != "-" ]; then
+            if [ -n "$2" ] && case "$2" in -*) false;; *) true;; esac; then
                 VENV_DIR="$2"
                 shift
             fi
@@ -38,7 +38,7 @@ while [ $# -gt 0 ]; do
     esac
 done
 
-if [ "$EUID" -ne 0 ]; then
+if [ "$(id -u)" -ne 0 ]; then
     echo "sudo で実行してください: sudo ./sample/scripts/setup_unihiker_sample.sh"
     exit 1
 fi
@@ -54,7 +54,19 @@ echo "=========================================="
 
 echo ""
 echo "[1/4] 必須システムパッケージをインストール..."
-apt update
+if ! apt update 2>&1; then
+    echo ""
+    echo "  警告: apt update に失敗しました。"
+    echo "  Debian Buster 等の古いディストリビューションではリポジトリが"
+    echo "  アーカイブに移行されている場合があります。"
+    echo ""
+    echo "  以下のように /etc/apt/sources.list を修正してください:"
+    echo "    deb http://archive.debian.org/debian buster main"
+    echo "    deb http://archive.debian.org/debian-security buster/updates main"
+    echo ""
+    echo "  修正後、再度このスクリプトを実行してください。"
+    exit 1
+fi
 apt install -y \
     bluez \
     python3-pip \
