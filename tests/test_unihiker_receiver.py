@@ -26,19 +26,33 @@ class _DummyWidget:
         self.props.update(kwargs)
 
 
+class _DummyButton:
+    """Simple button mock that stores onclick callback."""
+
+    def __init__(self, onclick: object = None) -> None:
+        self.onclick = onclick
+
+
 class _DummyGUI:
     """Simple GUI mock compatible with adapter usage."""
 
     def __init__(self) -> None:
         self.widgets: list[_DummyWidget] = []
+        self.buttons: list[_DummyButton] = []
 
     def draw_text(self, **_kwargs: object) -> _DummyWidget:
         widget = _DummyWidget()
         self.widgets.append(widget)
         return widget
 
+    def add_button(self, **kwargs: object) -> _DummyButton:
+        button = _DummyButton(onclick=kwargs.get("onclick"))
+        self.buttons.append(button)
+        return button
+
     def clear(self) -> None:
         self.widgets.clear()
+        self.buttons.clear()
 
 
 class TestUnihikerScreenState:
@@ -127,6 +141,28 @@ class TestUnihikerDisplayAdapter:
         text = UnihikerDisplayAdapter._build_buffer_text("x" * 80)
         assert text.startswith("> ...")
         assert text.endswith("_")
+
+    def test_stop_button_created(self) -> None:
+        gui = _DummyGUI()
+        adapter = UnihikerDisplayAdapter(gui=gui)
+        adapter.init()
+        assert len(gui.buttons) == 1
+
+    def test_stop_button_calls_on_stop(self) -> None:
+        gui = _DummyGUI()
+        adapter = UnihikerDisplayAdapter(gui=gui)
+        callback = MagicMock()
+        adapter.on_stop = callback
+        adapter.init()
+        adapter._handle_stop_click()
+        callback.assert_called_once()
+
+    def test_stop_button_no_callback(self) -> None:
+        gui = _DummyGUI()
+        adapter = UnihikerDisplayAdapter(gui=gui)
+        adapter.init()
+        # Should not raise when on_stop is None
+        adapter._handle_stop_click()
 
 
 class TestUnihikerReceiverApp:

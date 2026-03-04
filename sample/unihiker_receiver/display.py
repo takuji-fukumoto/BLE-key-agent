@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import importlib
+import logging
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Callable
 
 from common.protocol import KeyEvent, KeyType, Modifiers
 
 from .config import BUFFER_VISIBLE_CHARS, INPUT_BUFFER_MAX_LENGTH, LAYOUT
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -59,6 +62,8 @@ class UnihikerDisplayAdapter:
         self._key_widget: Any | None = None
         self._modifier_widget: Any | None = None
         self._buffer_widget: Any | None = None
+        self._stop_button: Any | None = None
+        self.on_stop: Callable[[], None] | None = None
 
     @property
     def state(self) -> UnihikerScreenState:
@@ -125,8 +130,24 @@ class UnihikerDisplayAdapter:
             color="#FFFFFF",
         )
 
+        self._stop_button = self._gui.add_button(
+            x=LAYOUT.stop_button_x,
+            y=LAYOUT.stop_button_y,
+            w=LAYOUT.stop_button_w,
+            h=LAYOUT.stop_button_h,
+            text="Stop",
+            origin="center",
+            onclick=self._handle_stop_click,
+        )
+
         self._initialized = True
         self.render(force=True)
+
+    def _handle_stop_click(self) -> None:
+        """Handle stop button click event."""
+        logger.info("Stop button clicked")
+        if self.on_stop is not None:
+            self.on_stop()
 
     def shutdown(self) -> None:
         """Clear widgets and reset display state."""
