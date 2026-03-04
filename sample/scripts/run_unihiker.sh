@@ -21,35 +21,55 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 cd "$PROJECT_ROOT"
 
-# venv が存在すれば自動で有効化
+# Python 3.10+ を検出（setup_unihiker_sample.sh と同じロジック）
+ACTUAL_USER="${SUDO_USER:-$USER}"
+ACTUAL_HOME=$(eval echo "~$ACTUAL_USER")
 VENV_DIR="$PROJECT_ROOT/.venv"
-if [ -d "$VENV_DIR" ] && [ -f "$VENV_DIR/bin/python" ]; then
-    source "$VENV_DIR/bin/activate"
-    PYTHON="$VENV_DIR/bin/python"
-    VENV_LABEL="venv ($VENV_DIR)"
-else
-    # pyenv の Python 3.10+ を検索
-    ACTUAL_HOME="${HOME}"
+
+find_suitable_python() {
+    # 1) venv が存在すればそれを使う
+    if [ -d "$VENV_DIR" ] && [ -f "$VENV_DIR/bin/python" ]; then
+        echo "$VENV_DIR/bin/python"
+        return 0
+    fi
+
+    # 2) pyenv のバージョンを検索（3.12 → 3.11 → 3.10 の順で優先）
     PYENV_ROOT="${ACTUAL_HOME}/.pyenv"
-    FOUND_PYENV=""
     if [ -d "$PYENV_ROOT/versions" ]; then
         for minor in 12 11 10; do
             for pydir in "$PYENV_ROOT/versions/3.${minor}"*/bin/python3; do
                 if [ -x "$pydir" ] 2>/dev/null; then
-                    FOUND_PYENV="$pydir"
-                    break 2
+                    echo "$pydir"
+                    return 0
                 fi
             done
         done
     fi
 
-    if [ -n "$FOUND_PYENV" ]; then
-        PYTHON="$FOUND_PYENV"
-        VENV_LABEL="pyenv ($PYTHON)"
-    else
-        PYTHON="python3"
-        VENV_LABEL="system"
+    # 3) システム python3
+    if command -v python3 >/dev/null 2>&1; then
+        echo "$(command -v python3)"
+        return 0
     fi
+
+    return 1
+}
+
+PYTHON="$(find_suitable_python)" || true
+
+if [ -z "$PYTHON" ]; then
+    echo "エラー: Python が見つかりません。"
+    echo "先に setup_unihiker_sample.sh を実行してください。"
+    exit 1
+fi
+
+if [ -d "$VENV_DIR" ] && [ -f "$VENV_DIR/bin/python" ]; then
+    source "$VENV_DIR/bin/activate"
+    VENV_LABEL="venv ($VENV_DIR)"
+elif echo "$PYTHON" | grep -q "pyenv"; then
+    VENV_LABEL="pyenv ($PYTHON)"
+else
+    VENV_LABEL="system"
 fi
 
 # ログディレクトリのデフォルト値
