@@ -28,6 +28,10 @@ class Layout:
     modifier_y: int = 170
     buffer_x: int = 20
     buffer_y: int = 276
+    stop_button_x: int = 120
+    stop_button_y: int = 300
+    stop_button_w: int = 80
+    stop_button_h: int = 30
 
 
 LAYOUT = Layout()

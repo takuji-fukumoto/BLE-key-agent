@@ -79,6 +79,7 @@ class UnihikerReceiverApp:
         self._loop = asyncio.get_running_loop()
 
         logger.info("Initializing display...")
+        self._display.on_stop = self._signal_shutdown
         self._display.init()
         logger.info("Display initialized")
 

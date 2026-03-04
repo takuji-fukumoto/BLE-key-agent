@@ -33,6 +33,21 @@ UNIHIKER M10 の GUI ライブラリを使った BLE キー受信表示サンプ
 - GUI は tkinter ベースで、内部で別スレッドの mainloop を起動する
 - UNIHIKER 本体にデフォルト導入済みだが、pyenv Python には `pip install unihiker` が必要
 
+### UNIHIKER GUI ボタン（`add_button`）
+
+- `gui.add_button(x, y, w, h, text, origin, state, onclick)` でボタンを配置
+- `onclick` にはコールバック関数を渡す（引数なし）
+- GUI は tkinter ベースのため、`onclick` 内で長時間ブロックすると画面が固まる
+- 複雑な処理を行う場合は `gui.start_thread(func)` を使用する
+- 停止ボタンは `display.on_stop` コールバックで `UnihikerReceiverApp._signal_shutdown` に接続し、asyncio.Event 経由でグレースフルシャットダウンを実行する
+
+### Python ラッパー（`run_unihiker.py`）
+
+- `sample/scripts/run_unihiker.py` は `subprocess.run()` で `run_unihiker.sh` を呼ぶ薄いラッパー
+- シェルスクリプトがマスター（Python 検出・venv 有効化・Bluetooth 設定）
+- Python 側は引数組み立てと `check=True` でのエラー伝搬のみ担当
+- `_resolve_script_path()` は `Path(__file__)` 相対でスクリプトを解決するため、任意の作業ディレクトリから呼び出し可能
+
 ### bless ライブラリのバージョン互換性
 
 - `bless>=0.3.0` は `bleak>=1.1.1` を要求し、Python 3.8+ が必須
@@ -48,8 +63,10 @@ UNIHIKER M10 の GUI ライブラリを使った BLE キー受信表示サンプ
 ## 関連ファイル
 
 - `sample/unihiker_receiver/main.py` — アプリ本体（KeyReceiver 統合・ログ設定）
-- `sample/unihiker_receiver/display.py` — GUI アダプタ（draw_text/config ベース）
-- `sample/unihiker_receiver/config.py` — 画面レイアウト・定数
+- `sample/unihiker_receiver/display.py` — GUI アダプタ（draw_text/config + add_button ベース）
+- `sample/unihiker_receiver/config.py` — 画面レイアウト・定数（停止ボタン座標含む）
 - `sample/scripts/setup_unihiker_sample.sh` — 環境セットアップ（pyenv 検出・apt 対応）
 - `sample/scripts/run_unihiker.sh` — 起動スクリプト（Python 自動検出）
+- `sample/scripts/run_unihiker.py` — Python ラッパー（subprocess 経由）
 - `tests/test_unihiker_receiver.py` — 単体テスト
+- `tests/test_run_unihiker.py` — Python ラッパーテスト
