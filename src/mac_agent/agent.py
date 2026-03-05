@@ -56,6 +56,8 @@ class KeyBleAgent:
             reconnect_initial_delay=self._config.reconnect_initial_delay,
             reconnect_max_delay=self._config.reconnect_max_delay,
             reconnect_backoff_multiplier=self._config.reconnect_backoff_multiplier,
+            connect_max_attempts=self._config.connect_max_attempts,
+            connect_retry_delay=self._config.connect_retry_delay,
         )
 
     @property

@@ -29,6 +29,8 @@ class AgentConfig:
     heartbeat_interval_sec: float = 3.0
     min_send_interval_sec: float = 0.005
     key_queue_max_size: int = 256
+    connect_max_attempts: int = 3
+    connect_retry_delay: float = 1.0
 
 
 StatusCallback = Callable[[object], None]
