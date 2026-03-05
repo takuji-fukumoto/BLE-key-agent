@@ -17,7 +17,11 @@ _bless_mock.GATTCharacteristicProperties.write_without_response = 0x04
 _bless_mock.GATTAttributePermissions.readable = 0x01
 _bless_mock.GATTAttributePermissions.writeable = 0x02
 
+_adv_mock = MagicMock()
+
 sys.modules.setdefault("bless", _bless_mock)
+sys.modules.setdefault("bless.backends", MagicMock())
+sys.modules.setdefault("bless.backends.advertisement", _adv_mock)
 
 from raspi_receiver.lib.gatt_server import GATTServer  # noqa: E402
 
@@ -124,6 +128,31 @@ class TestGATTServerStart:
         gatt_arg = mock_bless_server.add_gatt.call_args[0][0]
         assert KEY_SERVICE_UUID in gatt_arg
         assert KEY_CHAR_UUID in gatt_arg[KEY_SERVICE_UUID]
+
+    @pytest.mark.asyncio
+    async def test_start_passes_advertisement_data(
+        self, mock_bless_server
+    ) -> None:
+        """Test start() passes BlessAdvertisementData with service UUID."""
+        from common.uuids import KEY_SERVICE_UUID
+
+        # Reset the module-level mock to avoid cross-test contamination
+        _adv_mock.BlessAdvertisementData.reset_mock()
+
+        server = GATTServer()
+        await server.start()
+
+        mock_bless_server.start.assert_called_once()
+        call_kwargs = mock_bless_server.start.call_args.kwargs
+        adv_data = call_kwargs.get("advertisement_data")
+        assert adv_data is not None
+
+        # Verify BlessAdvertisementData was constructed with correct args
+        adv_constructor = _adv_mock.BlessAdvertisementData
+        adv_constructor.assert_called_once_with(
+            local_name="RasPi-KeyAgent",
+            service_uuids=[KEY_SERVICE_UUID],
+        )
 
 
 class TestGATTServerStop:
