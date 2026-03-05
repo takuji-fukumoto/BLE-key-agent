@@ -70,6 +70,23 @@ class TestBleClientInit:
         assert client._reconnect_max_delay == 30.0
         assert client._reconnect_backoff_multiplier == 3.0
 
+    def test_custom_connect_retry_config(self) -> None:
+        """Test custom connect retry configuration is stored."""
+        client = BleClient(
+            connect_max_attempts=5,
+            connect_retry_delay=2.0,
+        )
+
+        assert client._connect_max_attempts == 5
+        assert client._connect_retry_delay == 2.0
+
+    def test_default_connect_retry_config(self) -> None:
+        """Test default connect retry configuration."""
+        client = BleClient()
+
+        assert client._connect_max_attempts == 3
+        assert client._connect_retry_delay == 1.0
+
 
 class TestBleDeviceDataclass:
     """Tests for BleDevice dataclass."""
@@ -142,6 +159,22 @@ class TestBleClientScan:
         assert STATUS_SCANNING in status_changes
         assert STATUS_DISCONNECTED in status_changes
 
+    @pytest.mark.asyncio
+    async def test_scan_uses_service_uuid_filter(self) -> None:
+        """Test scan() passes service_uuids to BleakScanner.discover."""
+        client = BleClient()
+
+        with patch('bleak.BleakScanner') as mock_scanner:
+            mock_scanner.discover = AsyncMock(return_value={})
+
+            await client.scan(timeout=5.0)
+
+            mock_scanner.discover.assert_called_once_with(
+                timeout=5.0,
+                return_adv=True,
+                service_uuids=[KEY_SERVICE_UUID],
+            )
+
 
 class TestBleClientConnect:
     """Tests for connect() method."""
@@ -154,7 +187,7 @@ class TestBleClientConnect:
         def track_status(status: str):
             status_changes.append(status)
 
-        client = BleClient(on_status_change=track_status)
+        client = BleClient(on_status_change=track_status, connect_max_attempts=1)
 
         # Mock device discovery
         mock_device = MagicMock()
@@ -179,7 +212,7 @@ class TestBleClientConnect:
         with patch('bleak.BleakScanner') as mock_scanner, \
              patch('bleak.BleakClient', return_value=mock_bleak_client):
 
-            mock_scanner.find_device_by_address = AsyncMock(return_value=mock_device)
+            mock_scanner.find_device_by_filter = AsyncMock(return_value=mock_device)
 
             success = await client.connect("AA:BB:CC:DD:EE:FF")
 
@@ -196,10 +229,10 @@ class TestBleClientConnect:
     async def test_connect_device_not_found(self) -> None:
         """Test connection fails when device not found."""
         callback = MagicMock()
-        client = BleClient(on_status_change=callback)
+        client = BleClient(on_status_change=callback, connect_max_attempts=1)
 
         with patch('bleak.BleakScanner') as mock_scanner:
-            mock_scanner.find_device_by_address = AsyncMock(return_value=None)
+            mock_scanner.find_device_by_filter = AsyncMock(return_value=None)
 
             success = await client.connect("AA:BB:CC:DD:EE:FF")
 
@@ -210,7 +243,7 @@ class TestBleClientConnect:
     async def test_connect_missing_key_service(self) -> None:
         """Test connection fails when KEY_SERVICE_UUID not found."""
         callback = MagicMock()
-        client = BleClient(on_status_change=callback)
+        client = BleClient(on_status_change=callback, connect_max_attempts=1)
 
         mock_device = MagicMock()
         mock_device.name = "TestDevice"
@@ -229,13 +262,130 @@ class TestBleClientConnect:
         with patch('bleak.BleakScanner') as mock_scanner, \
              patch('bleak.BleakClient', return_value=mock_bleak_client):
 
-            mock_scanner.find_device_by_address = AsyncMock(return_value=mock_device)
+            mock_scanner.find_device_by_filter = AsyncMock(return_value=mock_device)
 
             success = await client.connect("AA:BB:CC:DD:EE:FF")
 
         assert success is False
         assert client.status == STATUS_DISCONNECTED
         mock_bleak_client.disconnect.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_connect_uses_find_device_by_filter(self) -> None:
+        """Test _connect_once uses find_device_by_filter with service_uuids."""
+        client = BleClient(connect_max_attempts=1)
+
+        mock_device = MagicMock()
+        mock_device.name = "TestDevice"
+        mock_device.address = "AA:BB:CC:DD:EE:FF"
+
+        mock_bleak_client = AsyncMock()
+        mock_bleak_client.connect = AsyncMock()
+        mock_bleak_client.mtu_size = 247
+
+        mock_service = MagicMock()
+        mock_service.uuid = KEY_SERVICE_UUID
+        mock_char = MagicMock()
+        mock_char.uuid = KEY_CHAR_UUID
+        mock_char.properties = ["write", "write-without-response"]
+        mock_service.characteristics = [mock_char]
+        mock_bleak_client.services = [mock_service]
+
+        with patch('bleak.BleakScanner') as mock_scanner, \
+             patch('bleak.BleakClient', return_value=mock_bleak_client):
+
+            mock_scanner.find_device_by_filter = AsyncMock(return_value=mock_device)
+
+            await client.connect("AA:BB:CC:DD:EE:FF")
+
+            mock_scanner.find_device_by_filter.assert_called_once()
+            call_kwargs = mock_scanner.find_device_by_filter.call_args.kwargs
+            assert call_kwargs["service_uuids"] == [KEY_SERVICE_UUID]
+            assert call_kwargs["timeout"] == 10.0
+
+
+class TestBleClientConnectRetry:
+    """Tests for connection retry logic."""
+
+    @pytest.mark.asyncio
+    async def test_connect_retries_on_failure(self) -> None:
+        """Test connect retries when _connect_once fails."""
+        client = BleClient(connect_max_attempts=3, connect_retry_delay=0.01)
+
+        client._connect_once = AsyncMock(side_effect=[False, False, True])
+
+        with patch('mac_agent.ble_client.asyncio.sleep', new_callable=AsyncMock):
+            success = await client.connect("AA:BB:CC:DD:EE:FF")
+
+        assert success is True
+        assert client._connect_once.call_count == 3
+
+    @pytest.mark.asyncio
+    async def test_connect_all_retries_exhausted(self) -> None:
+        """Test connect returns False when all attempts fail."""
+        client = BleClient(connect_max_attempts=3, connect_retry_delay=0.01)
+
+        client._connect_once = AsyncMock(return_value=False)
+
+        with patch('mac_agent.ble_client.asyncio.sleep', new_callable=AsyncMock):
+            success = await client.connect("AA:BB:CC:DD:EE:FF")
+
+        assert success is False
+        assert client.status == STATUS_DISCONNECTED
+        assert client._connect_once.call_count == 3
+
+    @pytest.mark.asyncio
+    async def test_connect_retry_delay_applied(self) -> None:
+        """Test asyncio.sleep is called between retry attempts."""
+        client = BleClient(connect_max_attempts=3, connect_retry_delay=0.5)
+
+        client._connect_once = AsyncMock(side_effect=[False, False, True])
+
+        with patch('mac_agent.ble_client.asyncio.sleep', new_callable=AsyncMock) as mock_sleep:
+            await client.connect("AA:BB:CC:DD:EE:FF")
+
+        # Sleep called between attempt 1->2 and 2->3, not after last
+        assert mock_sleep.call_count == 2
+        mock_sleep.assert_called_with(0.5)
+
+    @pytest.mark.asyncio
+    async def test_connect_first_attempt_succeeds_no_retry(self) -> None:
+        """Test no sleep when first attempt succeeds."""
+        client = BleClient(connect_max_attempts=3, connect_retry_delay=1.0)
+
+        client._connect_once = AsyncMock(return_value=True)
+
+        with patch('mac_agent.ble_client.asyncio.sleep', new_callable=AsyncMock) as mock_sleep:
+            success = await client.connect("AA:BB:CC:DD:EE:FF")
+
+        assert success is True
+        assert client._connect_once.call_count == 1
+        mock_sleep.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_connect_status_stays_connecting_during_retries(self) -> None:
+        """Test status remains CONNECTING during retry attempts (not reset to DISCONNECTED)."""
+        status_changes = []
+
+        def track_status(status):
+            status_changes.append(status)
+
+        client = BleClient(
+            on_status_change=track_status,
+            connect_max_attempts=3,
+            connect_retry_delay=0.01,
+        )
+
+        # All attempts fail - verify DISCONNECTED only set once at end
+        client._connect_once = AsyncMock(return_value=False)
+
+        with patch('mac_agent.ble_client.asyncio.sleep', new_callable=AsyncMock):
+            await client.connect("AA:BB:CC:DD:EE:FF")
+
+        # CONNECTING set once at start, DISCONNECTED only at end (not between retries)
+        assert status_changes[0] == STATUS_CONNECTING
+        assert status_changes.count(STATUS_DISCONNECTED) == 1
+        assert status_changes[-1] == STATUS_DISCONNECTED
 
 
 class TestBleClientSendKey:

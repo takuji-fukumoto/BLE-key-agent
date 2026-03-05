@@ -71,6 +71,7 @@ class GATTServer:
             GATTAttributePermissions,
             GATTCharacteristicProperties,
         )
+        from bless.backends.advertisement import BlessAdvertisementData
 
         loop = asyncio.get_running_loop()
 
@@ -94,7 +95,12 @@ class GATTServer:
         self._server.write_request_func = self._handle_write
 
         await self._server.add_gatt(gatt)
-        await self._server.start()
+
+        adv_data = BlessAdvertisementData(
+            local_name=self._device_name,
+            service_uuids=[KEY_SERVICE_UUID],
+        )
+        await self._server.start(advertisement_data=adv_data)
         self._running = True
 
         logger.info(

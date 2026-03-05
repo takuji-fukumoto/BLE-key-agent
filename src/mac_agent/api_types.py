@@ -20,6 +20,8 @@ class AgentConfig:
         heartbeat_interval_sec: Heartbeat interval in seconds.
         min_send_interval_sec: Minimum interval between BLE writes.
         key_queue_max_size: Maximum buffered key events.
+        connect_max_attempts: Maximum connection attempts per connect() call.
+        connect_retry_delay: Delay in seconds between connection retry attempts.
     """
 
     device_name: str = "RasPi-KeyAgent"
@@ -29,6 +31,8 @@ class AgentConfig:
     heartbeat_interval_sec: float = 3.0
     min_send_interval_sec: float = 0.005
     key_queue_max_size: int = 256
+    connect_max_attempts: int = 3
+    connect_retry_delay: float = 1.0
 
 
 StatusCallback = Callable[[object], None]

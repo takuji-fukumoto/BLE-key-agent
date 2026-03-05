@@ -85,6 +85,8 @@ class BleClient:
         reconnect_initial_delay: float = 1.0,
         reconnect_max_delay: float = 60.0,
         reconnect_backoff_multiplier: float = 2.0,
+        connect_max_attempts: int = 3,
+        connect_retry_delay: float = 1.0,
     ) -> None:
         """Initialize BleClient.
 
@@ -93,6 +95,8 @@ class BleClient:
             reconnect_initial_delay: Initial delay before first reconnect attempt.
             reconnect_max_delay: Maximum reconnect delay.
             reconnect_backoff_multiplier: Exponential backoff multiplier.
+            connect_max_attempts: Maximum connection attempts per connect() call.
+            connect_retry_delay: Delay in seconds between connection retry attempts.
         """
         self._on_status_change = on_status_change
         self._status = STATUS_DISCONNECTED
@@ -103,6 +107,8 @@ class BleClient:
         self._reconnect_initial_delay = reconnect_initial_delay
         self._reconnect_max_delay = reconnect_max_delay
         self._reconnect_backoff_multiplier = reconnect_backoff_multiplier
+        self._connect_max_attempts = connect_max_attempts
+        self._connect_retry_delay = connect_retry_delay
 
     @property
     def status(self) -> BleStatus:
@@ -132,7 +138,8 @@ class BleClient:
         try:
             devices = await BleakScanner.discover(
                 timeout=timeout,
-                return_adv=True
+                return_adv=True,
+                service_uuids=[KEY_SERVICE_UUID],
             )
 
             # Convert to BleDevice objects
@@ -156,9 +163,52 @@ class BleClient:
                 self._set_status(STATUS_DISCONNECTED)
 
     async def connect(self, address: str) -> bool:
-        """Connect to a BLE device by address.
+        """Connect to a BLE device by address with retry.
 
-        Verifies KEY_SERVICE_UUID is present before returning success.
+        Attempts connection up to ``connect_max_attempts`` times with
+        ``connect_retry_delay`` seconds between attempts.  Verifies
+        KEY_SERVICE_UUID is present before returning success.
+
+        Args:
+            address: MAC address of target device.
+
+        Returns:
+            True if connection succeeded, False otherwise.
+        """
+        if self._client is not None:
+            await self.disconnect()
+
+        self._set_status(STATUS_CONNECTING)
+        self._last_address = address
+
+        for attempt in range(1, self._connect_max_attempts + 1):
+            logger.info(
+                "Connection attempt %d/%d to %s",
+                attempt,
+                self._connect_max_attempts,
+                address,
+            )
+            success = await self._connect_once(address)
+            if success:
+                return True
+
+            if attempt < self._connect_max_attempts:
+                logger.info("Retrying in %.1fs...", self._connect_retry_delay)
+                await asyncio.sleep(self._connect_retry_delay)
+
+        logger.warning(
+            "All %d connection attempts failed for %s",
+            self._connect_max_attempts,
+            address,
+        )
+        self._set_status(STATUS_DISCONNECTED)
+        return False
+
+    async def _connect_once(self, address: str) -> bool:
+        """Single connection attempt (internal).
+
+        Discovers the device using Service UUID hint for improved
+        reliability on macOS, then connects and verifies the GATT service.
 
         Args:
             address: MAC address of target device.
@@ -168,43 +218,33 @@ class BleClient:
         """
         from bleak import BleakClient, BleakScanner
 
-        if self._client is not None:
-            await self.disconnect()
-
-        self._set_status(STATUS_CONNECTING)
-        self._last_address = address
-
         try:
-            # Find device by address
-            device = await BleakScanner.find_device_by_address(
-                address,
-                timeout=10.0
+            device = await BleakScanner.find_device_by_filter(
+                filterfunc=lambda d, adv: d.address == address,
+                timeout=10.0,
+                service_uuids=[KEY_SERVICE_UUID],
             )
 
             if device is None:
                 logger.warning("Device not found: %s", address)
-                self._set_status(STATUS_DISCONNECTED)
                 return False
 
-            # Connect
             client = BleakClient(
                 device,
-                disconnected_callback=self._on_disconnect
+                disconnected_callback=self._on_disconnect,
             )
             await client.connect()
 
-            # Verify KEY_SERVICE_UUID exists
             if not self._verify_key_service(client):
                 logger.error("Device missing KEY_SERVICE_UUID")
                 await client.disconnect()
-                self._set_status(STATUS_DISCONNECTED)
                 return False
 
             self._client = client
             self._connected_device = BleDevice(
                 name=device.name or "",
                 address=address,
-                rssi=None
+                rssi=None,
             )
             self._set_status(STATUS_CONNECTED)
 
@@ -212,13 +252,12 @@ class BleClient:
                 "Connected to %s (%s), MTU: %d",
                 device.name,
                 address,
-                client.mtu_size
+                client.mtu_size,
             )
             return True
 
         except Exception:
-            logger.exception("Connection failed to %s", address)
-            self._set_status(STATUS_DISCONNECTED)
+            logger.exception("Connection attempt failed to %s", address)
             return False
 
     async def send_key(self, event: KeyEvent) -> bool:
