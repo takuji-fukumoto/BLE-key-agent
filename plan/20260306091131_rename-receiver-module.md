@@ -87,30 +87,30 @@
 - [x] [Phase1] 新モジュール名の決定（ble_receiver, ble_sender）
 
 ## Phase2: 実装（コア）
-- [ ] [Phase2] `src/raspi_receiver/` → `src/ble_receiver/` ディレクトリリネーム（git mv）
-- [ ] [Phase2] `src/ble_receiver/__init__.py` docstring更新
-- [ ] [Phase2] `src/ble_receiver/lib/__init__.py` import文・docstring更新
-- [ ] [Phase2] `src/ble_receiver/lib/key_receiver.py` import文更新
-- [ ] [Phase2] `src/mac_agent/` → `src/ble_sender/` ディレクトリリネーム（git mv）
-- [ ] [Phase2] `src/ble_sender/__init__.py` import文・docstring更新
-- [ ] [Phase2] `src/ble_sender/agent.py` import文更新
-- [ ] [Phase2] `src/ble_sender/keyboard_monitor.py` import文・docstring更新
-- [ ] [Phase2] `src/ble_sender/main.py` import文・docstring更新
+- [x] [Phase2] `src/raspi_receiver/` → `src/ble_receiver/` ディレクトリリネーム（git mv）
+- [x] [Phase2] `src/ble_receiver/__init__.py` docstring更新
+- [x] [Phase2] `src/ble_receiver/lib/__init__.py` import文・docstring更新
+- [x] [Phase2] `src/ble_receiver/lib/key_receiver.py` import文更新
+- [x] [Phase2] `src/mac_agent/` → `src/ble_sender/` ディレクトリリネーム（git mv）
+- [x] [Phase2] `src/ble_sender/__init__.py` import文・docstring更新
+- [x] [Phase2] `src/ble_sender/agent.py` import文更新
+- [x] [Phase2] `src/ble_sender/keyboard_monitor.py` import文・docstring更新
+- [x] [Phase2] `src/ble_sender/main.py` import文・docstring更新
 
 ## Phase3: 実装（結合）
-- [ ] [Phase3] `sample/raspi_receiver/apps/cli_receiver/main.py` import文更新
-- [ ] [Phase3] `sample/raspi_receiver/apps/lcd_display/main.py` import文更新
-- [ ] [Phase3] `sample/unihiker_receiver/main.py` import文・docstring更新
-- [ ] [Phase3] `tests/test_key_receiver.py` import文・docstring更新
-- [ ] [Phase3] `tests/test_gatt_server.py` import文・docstring更新
-- [ ] [Phase3] `tests/test_unihiker_receiver.py` import文更新
-- [ ] [Phase3] `tests/test_ble_client.py` import文・patch文字列・docstring更新
-- [ ] [Phase3] `tests/test_key_monitor.py` import文・patch文字列・docstring更新
-- [ ] [Phase3] `tests/test_key_ble_agent.py` import文・docstring更新
-- [ ] [Phase3] `tests/test_keyboard_monitor_wrapper.py` import文・patch文字列・docstring更新
-- [ ] [Phase3] `scripts/run_mac.sh` モジュールパス更新
-- [ ] [Phase3] `docs/spec/raspi-receiver-lib.md` → `docs/spec/ble-receiver-lib.md` リネーム＋内容更新
-- [ ] [Phase3] `docs/spec/mac-agent-core.md` → `docs/spec/ble-sender-core.md` リネーム＋内容更新
+- [x] [Phase3] `sample/raspi_receiver/apps/cli_receiver/main.py` import文更新
+- [x] [Phase3] `sample/raspi_receiver/apps/lcd_display/main.py` import文更新
+- [x] [Phase3] `sample/unihiker_receiver/main.py` import文・docstring更新
+- [x] [Phase3] `tests/test_key_receiver.py` import文・docstring更新
+- [x] [Phase3] `tests/test_gatt_server.py` import文・docstring更新
+- [x] [Phase3] `tests/test_unihiker_receiver.py` import文更新
+- [x] [Phase3] `tests/test_ble_client.py` import文・patch文字列・docstring更新
+- [x] [Phase3] `tests/test_key_monitor.py` import文・patch文字列・docstring更新
+- [x] [Phase3] `tests/test_key_ble_agent.py` import文・docstring更新
+- [x] [Phase3] `tests/test_keyboard_monitor_wrapper.py` import文・patch文字列・docstring更新
+- [x] [Phase3] `scripts/run_mac.sh` モジュールパス更新
+- [x] [Phase3] `docs/spec/raspi-receiver-lib.md` → `docs/spec/ble-receiver-lib.md` リネーム＋内容更新
+- [x] [Phase3] `docs/spec/mac-agent-core.md` → `docs/spec/ble-sender-core.md` リネーム＋内容更新
 
 ## Phase4: テスト
 - [ ] [Phase4] pytest 全テスト実行・パス確認
