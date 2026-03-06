@@ -6,7 +6,7 @@
 #
 # 使用方法:
 #   ./scripts/run_mac.sh              # 対話形式でデバイス選択
-#   ./scripts/run_mac.sh RasPi-KeyAgent  # デバイス名を指定して直接接続
+#   ./scripts/run_mac.sh BLEKeyReceiver  # デバイス名を指定して直接接続
 #
 
 set -e

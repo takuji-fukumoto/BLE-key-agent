@@ -160,7 +160,7 @@ cd BLE-key-agent
 sudo ./sample/scripts/run_raspi.sh
 ```
 
-起動すると `RasPi-KeyAgent` としてアドバタイズが開始され、LCD に接続待ち画面が表示される。
+起動すると `BLEKeyReceiver` としてアドバタイズが開始され、LCD に接続待ち画面が表示される。
 
 > **Note**: `sudo` は BLE アドバタイズと GPIO/SPI アクセスに必要
 
@@ -171,7 +171,7 @@ cd BLE-key-agent
 python3 -m sample.unihiker_receiver.main
 ```
 
-起動すると `RasPi-KeyAgent` としてアドバタイズを開始し、UNIHIKER 画面に接続状態・最新キー・入力バッファを表示する。
+起動すると `BLEKeyReceiver` としてアドバタイズを開始し、UNIHIKER 画面に接続状態・最新キー・入力バッファを表示する。
 
 ### 2. Mac 側（キー送信エージェント）
 
@@ -187,7 +187,7 @@ cd BLE-key-agent
 
 **デバイス名を指定して直接接続:**
 ```bash
-./scripts/run_mac.sh "RasPi-KeyAgent"
+./scripts/run_mac.sh "BLEKeyReceiver"
 ```
 
 接続後、Mac でのキー入力がリアルタイムに Pi の LCD に表示される。
@@ -204,7 +204,7 @@ from ble_sender import AgentConfig, KeyBleAgent
 
 async def main() -> None:
 	agent = KeyBleAgent(
-		config=AgentConfig(device_name="RasPi-KeyAgent"),
+		config=AgentConfig(device_name="BLEKeyReceiver"),
 		on_status_change=lambda s: print(f"status={s.value}"),
 	)
 
@@ -243,7 +243,7 @@ from ble_receiver.lib import KeyReceiver, KeyReceiverConfig
 async def main() -> None:
 	receiver = KeyReceiver(
 		config=KeyReceiverConfig(
-			device_name="RasPi-KeyAgent",
+			device_name="BLEKeyReceiver",
 			disconnect_timeout_sec=10.0,
 		)
 	)
@@ -313,7 +313,7 @@ PYTHONPATH=src:sample pytest tests/
 |---|---|
 | Service UUID | `6e3f9c05-56c2-5b6e-9b00-8d85c2e85f2f` |
 | Characteristic UUID | `d8c7b1e4-42a3-5d2c-a100-9e96d3f96a3f` |
-| デバイス名 | `RasPi-KeyAgent` |
+| デバイス名 | `BLEKeyReceiver` |
 | データ形式 | JSON UTF-8（例: `{"t":"c","v":"a","p":true}`） |
 | 書き込み方式 | Write Without Response（低レイテンシ優先） |
 

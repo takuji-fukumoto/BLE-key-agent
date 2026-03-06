@@ -24,7 +24,7 @@ class AgentConfig:
         connect_retry_delay: Delay in seconds between connection retry attempts.
     """
 
-    device_name: str = "RasPi-KeyAgent"
+    device_name: str = "BLEKeyReceiver"
     reconnect_initial_delay: float = 1.0
     reconnect_max_delay: float = 60.0
     reconnect_backoff_multiplier: float = 2.0

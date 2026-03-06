@@ -13,7 +13,7 @@ Examples:
     python -m ble_sender.main
 
     # Connect directly to a named device
-    python -m ble_sender.main --device "RasPi-KeyAgent"
+    python -m ble_sender.main --device "BLEKeyReceiver"
 """
 
 from __future__ import annotations
@@ -46,7 +46,7 @@ class MacAgent:
         self._device_name = device_name
         self._agent = KeyBleAgent(
             config=AgentConfig(
-                device_name=device_name or "RasPi-KeyAgent",
+                device_name=device_name or "BLEKeyReceiver",
             ),
             on_status_change=self._on_ble_status_change,
             on_error=self._on_error,
@@ -152,7 +152,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--device", "-d",
-        help="Device name to connect directly (e.g., 'RasPi-KeyAgent')",
+        help="Device name to connect directly (e.g., 'BLEKeyReceiver')",
     )
     args = parser.parse_args()
 

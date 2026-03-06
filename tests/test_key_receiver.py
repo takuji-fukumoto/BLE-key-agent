@@ -39,7 +39,7 @@ class TestKeyReceiverInit:
         mock_cls, _ = mock_gatt_server
         KeyReceiver()
         mock_cls.assert_called_once()
-        assert mock_cls.call_args.kwargs["device_name"] == "RasPi-KeyAgent"
+        assert mock_cls.call_args.kwargs["device_name"] == "BLEKeyReceiver"
 
     def test_custom_device_name(self, mock_gatt_server) -> None:
         mock_cls, _ = mock_gatt_server

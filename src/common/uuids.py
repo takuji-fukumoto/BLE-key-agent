@@ -15,8 +15,8 @@ KEY_SERVICE_UUID: str = str(uuid.uuid5(PROJECT_NAMESPACE, "key-service"))
 # GATT Characteristic UUID for key event data
 KEY_CHAR_UUID: str = str(uuid.uuid5(PROJECT_NAMESPACE, "key-char"))
 
-# Default BLE device name for the Raspberry Pi peripheral
-DEVICE_NAME: str = "RasPi-KeyAgent"
+# Default BLE device name for the peripheral
+DEVICE_NAME: str = "BLEKeyReceiver"
 
 
 if __name__ == "__main__":

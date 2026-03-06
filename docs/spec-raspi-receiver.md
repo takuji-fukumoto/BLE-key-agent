@@ -61,7 +61,7 @@ PoCの `poc/ble_gatt/peripheral_raspi.py` をベースに実装。
 class GATTServer:
     def __init__(
         self,
-        device_name: str = "RasPi-KeyAgent",
+        device_name: str = "BLEKeyReceiver",
         on_write: Callable[[bytes], None] = None,
         on_connect: Callable[[], None] = None,
         on_disconnect: Callable[[], None] = None,
@@ -95,7 +95,7 @@ class KeyReceiver:
         await receiver.start()
     """
 
-    def __init__(self, device_name: str = "RasPi-KeyAgent"):
+    def __init__(self, device_name: str = "BLEKeyReceiver"):
         """レシーバーの初期化。"""
 
     # --- コールバック (アプリが上書きする) ---
@@ -122,7 +122,7 @@ import asyncio
 from ble_receiver.lib import KeyReceiver, KeyEvent
 
 async def main():
-    receiver = KeyReceiver(device_name="RasPi-KeyAgent")
+    receiver = KeyReceiver(device_name="BLEKeyReceiver")
 
     def on_key(event: KeyEvent):
         print(f"[{event.key_type}] {event.key_value} ({'press' if event.is_press else 'release'})")
