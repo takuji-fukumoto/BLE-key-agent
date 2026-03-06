@@ -33,10 +33,10 @@
 
 `disconnect()` が bleak の `disconnected_callback` を発火させても再接続が始まらないようにする。
 
-- [ ] [Phase2] `__init__` に `self._intentional_disconnect: bool = False` 追加
-- [ ] [Phase2] `disconnect()` 冒頭で `self._intentional_disconnect = True` を設定
-- [ ] [Phase2] `disconnect()` 末尾で `self._intentional_disconnect = False` をフォールバックリセット
-- [ ] [Phase2] `_on_disconnect()` でフラグチェック — True なら再接続スキップし DISCONNECTED に遷移
+- [x] [Phase2] `__init__` に `self._intentional_disconnect: bool = False` 追加
+- [x] [Phase2] `disconnect()` 冒頭で `self._intentional_disconnect = True` を設定
+- [x] [Phase2] `disconnect()` 末尾で `self._intentional_disconnect = False` をフォールバックリセット
+- [x] [Phase2] `_on_disconnect()` でフラグチェック — True なら再接続スキップし DISCONNECTED に遷移
 
 変更箇所:
 ```python
@@ -60,21 +60,21 @@ if self._intentional_disconnect:
 
 Bug 1 のフラグチェックと合わせて `_on_disconnect` 全体を try/except で囲む。
 
-- [ ] [Phase2] `_on_disconnect()` 全体を `try/except Exception` で囲む
-- [ ] [Phase2] except 節で `logger.exception()` + `_set_status(STATUS_DISCONNECTED)`
+- [x] [Phase2] `_on_disconnect()` 全体を `try/except Exception` で囲む
+- [x] [Phase2] except 節で `logger.exception()` + `_set_status(STATUS_DISCONNECTED)`
 
 ### Bug 2 + Bug 4: `_reconnect_loop` 修正
 
 Bug 2（ステータス復元）と Bug 4（例外ハンドリング）は同じメソッドなので同時に修正。
 
-- [ ] [Phase2] `_reconnect_loop()` の while ループを `try/except` で囲む
-- [ ] [Phase2] `asyncio.CancelledError` を catch して re-raise
-- [ ] [Phase2] 一般 `Exception` を catch して `logger.exception()` + `STATUS_DISCONNECTED`
-- [ ] [Phase2] `connect()` 失敗後に `self._set_status(STATUS_RECONNECTING)` を追加
+- [x] [Phase2] `_reconnect_loop()` の while ループを `try/except` で囲む
+- [x] [Phase2] `asyncio.CancelledError` を catch して re-raise
+- [x] [Phase2] 一般 `Exception` を catch して `logger.exception()` + `STATUS_DISCONNECTED`
+- [x] [Phase2] `connect()` 失敗後に `self._set_status(STATUS_RECONNECTING)` を追加
 
 ## Phase3: 実装（結合）
 
-- [ ] [Phase3] 4つのバグ修正が相互に干渉しないことを確認（`_on_disconnect` 内で Bug1 ガード → Bug3 例外処理の順序）
+- [x] [Phase3] 4つのバグ修正が相互に干渉しないことを確認（`_on_disconnect` 内で Bug1 ガード → Bug3 例外処理の順序）
 
 ## Phase4: テスト
 
