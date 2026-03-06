@@ -54,7 +54,7 @@ class UnihikerReceiverApp:
 
     def __init__(
         self,
-        device_name: str = "RasPi-KeyAgent",
+        device_name: str = "BLEKeyReceiver",
         render_interval_ms: int = RENDER_INTERVAL_MS,
     ) -> None:
         self._receiver = KeyReceiver(
@@ -213,7 +213,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--device-name",
         type=str,
-        default="RasPi-KeyAgent",
+        default="BLEKeyReceiver",
         help="BLE device name for advertising",
     )
     parser.add_argument(

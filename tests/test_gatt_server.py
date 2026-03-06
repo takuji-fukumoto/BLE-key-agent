@@ -44,7 +44,7 @@ class TestGATTServerInit:
 
     def test_default_device_name(self) -> None:
         server = GATTServer()
-        assert server._device_name == "RasPi-KeyAgent"
+        assert server._device_name == "BLEKeyReceiver"
 
     def test_custom_device_name(self) -> None:
         server = GATTServer(device_name="TestDevice")
@@ -150,7 +150,7 @@ class TestGATTServerStart:
         # Verify BlessAdvertisementData was constructed with correct args
         adv_constructor = _adv_mock.BlessAdvertisementData
         adv_constructor.assert_called_once_with(
-            local_name="RasPi-KeyAgent",
+            local_name="BLEKeyReceiver",
             service_uuids=[KEY_SERVICE_UUID],
         )
 

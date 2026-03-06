@@ -177,7 +177,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--device-name",
-        default="RasPi-KeyAgent",
+        default="BLEKeyReceiver",
         help="BLE device name to advertise",
     )
     parser.add_argument(
