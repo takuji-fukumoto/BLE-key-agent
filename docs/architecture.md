@@ -65,7 +65,7 @@ BLE-key-agent/
 │   │   ├── uuids.py              # UUID定数 (poc/ble_gatt/common.py から移行)
 │   │   └── protocol.py           # キーデータフォーマット定義
 │   │
-│   ├── mac_agent/                 # Mac側送信ライブラリ/CLI
+│   ├── ble_sender/                # BLE送信側ライブラリ/CLI
 │   │   ├── __init__.py
 │   │   ├── main.py               # エントリポイント (CLI)
 │   │   ├── agent.py              # 高レベル統合API
@@ -75,7 +75,7 @@ BLE-key-agent/
 │   │   ├── keyboard_monitor.py   # ライブラリ向け入力監視ラッパー
 │   │   └── requirements.txt
 │   │
-│   └── raspi_receiver/            # Raspberry Pi側ライブラリ
+│   └── ble_receiver/              # BLE受信側ライブラリ
 │       ├── lib/                   # ライブラリ部分（再利用可能）
 │       │   ├── __init__.py
 │       │   ├── gatt_server.py     # BLE GATTサーバー (bless)
@@ -96,16 +96,16 @@ BLE-key-agent/
 ## 3. モジュール依存関係
 
 ```
-common/uuids          ←── mac_agent/ble_client
-common/protocol       ←── mac_agent/key_monitor
-                      ←── raspi_receiver/lib/key_receiver
+common/uuids          ←── ble_sender/ble_client
+common/protocol       ←── ble_sender/key_monitor
+                      ←── ble_receiver/lib/key_receiver
 
-mac_agent/key_monitor ──▶ mac_agent/app (asyncio.Queue経由)
-mac_agent/ble_client  ──▶ mac_agent/agent (接続状態管理)
-mac_agent/agent       ──▶ external GUI/CLI (別リポジトリUI連携)
+ble_sender/key_monitor ──▶ ble_sender/app (asyncio.Queue経由)
+ble_sender/ble_client  ──▶ ble_sender/agent (接続状態管理)
+ble_sender/agent       ──▶ external GUI/CLI (別リポジトリUI連携)
 
-raspi_receiver/lib/gatt_server   ──▶ raspi_receiver/lib/key_receiver
-raspi_receiver/lib/key_receiver  ──▶ sample/raspi_receiver/apps/* (callback)
+ble_receiver/lib/gatt_server   ──▶ ble_receiver/lib/key_receiver
+ble_receiver/lib/key_receiver  ──▶ sample/raspi_receiver/apps/* (callback)
 ```
 
 ## 4. コンポーネント責務
@@ -117,7 +117,7 @@ raspi_receiver/lib/key_receiver  ──▶ sample/raspi_receiver/apps/* (callbac
 | `uuids.py` | Service/Characteristic UUID定数、デバイス名 |
 | `protocol.py` | キーイベントのシリアライズ/デシリアライズ定義 |
 
-### 4.2 mac_agent/
+### 4.2 ble_sender/
 
 | モジュール | 責務 |
 |---|---|
@@ -128,7 +128,7 @@ raspi_receiver/lib/key_receiver  ──▶ sample/raspi_receiver/apps/* (callbac
 | `key_monitor.py` | pynputによるグローバルキー監視、KeyEvent生成 |
 | `keyboard_monitor.py` | キー監視のライブラリ向けラッパー |
 
-### 4.3 raspi_receiver/lib/ （ライブラリ）
+### 4.3 ble_receiver/lib/ （ライブラリ）
 
 | モジュール | 責務 |
 |---|---|

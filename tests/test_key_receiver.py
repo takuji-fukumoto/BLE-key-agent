@@ -23,7 +23,7 @@ from ble_receiver.lib.types import ConnectionEvent
 @pytest.fixture
 def mock_gatt_server():
     """Create a mocked GATTServer that captures the on_write callback."""
-    with patch("raspi_receiver.lib.key_receiver.GATTServer") as mock_cls:
+    with patch("ble_receiver.lib.key_receiver.GATTServer") as mock_cls:
         instance = AsyncMock()
         instance.start = AsyncMock()
         instance.stop = AsyncMock()

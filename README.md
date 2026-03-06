@@ -63,11 +63,11 @@ BLE-key-agent/
 │   └── unihiker_receiver/        #   UNIHIKER サンプルアプリ
 ├── src/                           # ライブラリ実装
 │   ├── common/                   #   Mac/Pi 共有定義（UUID, プロトコル）
-│   ├── mac_agent/                #   Mac 側エージェント
+│   ├── ble_sender/               #   BLE 送信側ライブラリ/CLI
 │   │   ├── main.py               #     エントリポイント
 │   │   ├── ble_client.py         #     BLE Central クライアント
 │   │   └── key_monitor.py        #     キー入力監視
-│   └── raspi_receiver/           #   Raspberry Pi 側ライブラリ
+│   └── ble_receiver/             #   BLE 受信側ライブラリ
 │       └── lib/                  #     BLE 受信ライブラリ
 ├── poc/                           # PoC 実装（技術検証用）
 ├── docs/                          # 仕様書
@@ -194,12 +194,12 @@ cd BLE-key-agent
 
 ### 3. ライブラリとして利用（送信側）
 
-`mac_agent` はアプリとしての実行だけでなく、他リポジトリから再利用できるAPIを提供する。
+`ble_sender` はアプリとしての実行だけでなく、他リポジトリから再利用できるAPIを提供する。
 
 ```python
 import asyncio
 
-from mac_agent import AgentConfig, KeyBleAgent
+from ble_sender import AgentConfig, KeyBleAgent
 
 
 async def main() -> None:
@@ -232,12 +232,12 @@ asyncio.run(main())
 
 ### 4. ライブラリとして利用（受信側）
 
-`raspi_receiver.lib` は LCD 非依存の受信ライブラリとして利用できる。
+`ble_receiver.lib` は LCD 非依存の受信ライブラリとして利用できる。
 
 ```python
 import asyncio
 
-from raspi_receiver.lib import KeyReceiver, KeyReceiverConfig
+from ble_receiver.lib import KeyReceiver, KeyReceiverConfig
 
 
 async def main() -> None:

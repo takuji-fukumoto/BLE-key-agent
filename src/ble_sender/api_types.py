@@ -1,4 +1,4 @@
-"""Public API type definitions for reusable mac_agent library components."""
+"""Public API type definitions for reusable ble_sender library components."""
 
 from __future__ import annotations
 

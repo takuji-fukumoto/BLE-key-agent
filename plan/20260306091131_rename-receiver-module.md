@@ -113,17 +113,17 @@
 - [x] [Phase3] `docs/spec/mac-agent-core.md` → `docs/spec/ble-sender-core.md` リネーム＋内容更新
 
 ## Phase4: テスト
-- [ ] [Phase4] pytest 全テスト実行・パス確認
-- [ ] [Phase4] import エラーがないことを確認
+- [x] [Phase4] pytest 全テスト実行・パス確認
+- [x] [Phase4] import エラーがないことを確認
 
 ## Phase5: 仕上げ
-- [ ] [Phase5] `docs/architecture.md` パス参照更新
-- [ ] [Phase5] `docs/development-guide.md` パス参照更新
-- [ ] [Phase5] `docs/spec-raspi-receiver.md` モジュールパス参照更新
-- [ ] [Phase5] `docs/spec-mac-agent.md` モジュールパス参照更新
-- [ ] [Phase5] `docs/spec/ble-connectivity.md` パス参照更新
-- [ ] [Phase5] `CLAUDE.md` ディレクトリ構成・説明更新
-- [ ] [Phase5] `.github/copilot-instructions.md` パス更新
-- [ ] [Phase5] `README.md` パス・import例・コマンド例更新
-- [ ] [Phase5] CLAUDE.md規約準拠チェック
-- [ ] [Phase5] 最終テスト実行・動作確認
+- [x] [Phase5] `docs/architecture.md` パス参照更新
+- [x] [Phase5] `docs/development-guide.md` パス参照更新
+- [x] [Phase5] `docs/spec-raspi-receiver.md` モジュールパス参照更新
+- [x] [Phase5] `docs/spec-mac-agent.md` モジュールパス参照更新
+- [x] [Phase5] `docs/spec/ble-connectivity.md` パス参照更新
+- [x] [Phase5] `CLAUDE.md` ディレクトリ構成・説明更新
+- [x] [Phase5] `.github/copilot-instructions.md` パス更新
+- [x] [Phase5] `README.md` パス・import例・コマンド例更新
+- [x] [Phase5] CLAUDE.md規約準拠チェック
+- [x] [Phase5] 最終テスト実行・動作確認
