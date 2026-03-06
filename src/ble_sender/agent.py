@@ -12,9 +12,9 @@ import time
 from typing import Optional
 
 from common.protocol import KeyEvent
-from mac_agent.api_types import AgentConfig, ErrorCallback, KeyEventCallback, StatusCallback
-from mac_agent.ble_client import BleSender, BleStatus
-from mac_agent.keyboard_monitor import KeyboardMonitor
+from ble_sender.api_types import AgentConfig, ErrorCallback, KeyEventCallback, StatusCallback
+from ble_sender.ble_client import BleSender, BleStatus
+from ble_sender.keyboard_monitor import KeyboardMonitor
 
 logger = logging.getLogger(__name__)
 

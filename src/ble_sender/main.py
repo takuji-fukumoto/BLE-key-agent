@@ -1,19 +1,19 @@
-"""Mac Agent entry point for BLE key transmission.
+"""BLE key sender entry point.
 
 A simple CLI application that:
-1. Scans for and connects to Raspberry Pi (BLE Peripheral)
+1. Scans for and connects to a BLE Peripheral
 2. Monitors keyboard input
 3. Transmits key events via BLE GATT
 
 Usage:
-    python -m mac_agent.main [--device DEVICE_NAME]
+    python -m ble_sender.main [--device DEVICE_NAME]
 
 Examples:
     # Auto-scan and select device interactively
-    python -m mac_agent.main
+    python -m ble_sender.main
 
     # Connect directly to a named device
-    python -m mac_agent.main --device "RasPi-KeyAgent"
+    python -m ble_sender.main --device "RasPi-KeyAgent"
 """
 
 from __future__ import annotations
@@ -25,9 +25,9 @@ import signal
 import sys
 
 from common.protocol import KeyEvent
-from mac_agent import AgentConfig, KeyBleAgent
-from mac_agent.ble_client import BleStatus
-from mac_agent.keyboard_monitor import KeyboardMonitor
+from ble_sender import AgentConfig, KeyBleAgent
+from ble_sender.ble_client import BleStatus
+from ble_sender.keyboard_monitor import KeyboardMonitor
 
 logging.basicConfig(
     level=logging.INFO,
