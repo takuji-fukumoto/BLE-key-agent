@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from common.protocol import KeyEvent, KeyType
-from raspi_receiver.lib import ConnectionEvent, KeyReceiver, KeyReceiverConfig
+from ble_receiver.lib import ConnectionEvent, KeyReceiver, KeyReceiverConfig
 
 
 @dataclass(frozen=True)

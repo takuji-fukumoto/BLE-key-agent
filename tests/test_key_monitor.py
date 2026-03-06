@@ -1,4 +1,4 @@
-"""Unit tests for mac_agent.key_monitor module.
+"""Unit tests for ble_sender.key_monitor module.
 
 Uses mocks for the pynput library since keyboard monitoring requires
 platform-specific permissions. The pynput module is mocked to avoid
@@ -16,7 +16,7 @@ _pynput_mock = MagicMock()
 sys.modules.setdefault("pynput", _pynput_mock)
 sys.modules.setdefault("pynput.keyboard", _pynput_mock.keyboard)
 
-from mac_agent.key_monitor import KeyMonitor  # noqa: E402
+from ble_sender.key_monitor import KeyMonitor  # noqa: E402
 from common.protocol import KeyEvent, KeyType  # noqa: E402
 
 
@@ -64,7 +64,7 @@ class TestKeyClassification:
         type(mock_key).__name__ = 'KeyCode'
 
         # Use isinstance check workaround
-        with patch('mac_agent.key_monitor.keyboard.KeyCode', type(mock_key)):
+        with patch('ble_sender.key_monitor.keyboard.KeyCode', type(mock_key)):
             key_type, value = monitor._classify_key(mock_key)
 
         assert key_type == KeyType.CHAR
@@ -81,7 +81,7 @@ class TestKeyClassification:
         mock_key.name = 'enter'
         type(mock_key).__name__ = 'Key'
 
-        with patch('mac_agent.key_monitor.keyboard.Key', type(mock_key)):
+        with patch('ble_sender.key_monitor.keyboard.Key', type(mock_key)):
             key_type, value = monitor._classify_key(mock_key)
 
         assert key_type == KeyType.SPECIAL
@@ -167,7 +167,7 @@ class TestEventCreation:
         mock_key.char = 'a'
         type(mock_key).__name__ = 'KeyCode'
 
-        with patch('mac_agent.key_monitor.keyboard.KeyCode', type(mock_key)):
+        with patch('ble_sender.key_monitor.keyboard.KeyCode', type(mock_key)):
             event = monitor._create_event(mock_key, is_press=True)
 
         assert isinstance(event, KeyEvent)
@@ -189,7 +189,7 @@ class TestEventCreation:
         mock_key.char = 'A'
         type(mock_key).__name__ = 'KeyCode'
 
-        with patch('mac_agent.key_monitor.keyboard.KeyCode', type(mock_key)):
+        with patch('ble_sender.key_monitor.keyboard.KeyCode', type(mock_key)):
             event = monitor._create_event(mock_key, is_press=True)
 
         assert event.modifiers is not None
@@ -209,7 +209,7 @@ class TestAsyncioIntegration:
         mock_listener = MagicMock()
         mock_listener.start = MagicMock()
 
-        with patch('mac_agent.key_monitor.keyboard.Listener', return_value=mock_listener):
+        with patch('ble_sender.key_monitor.keyboard.Listener', return_value=mock_listener):
             await monitor.start()
 
         assert monitor._listener is mock_listener
@@ -300,7 +300,7 @@ class TestSafePut:
         mock_key.char = "x"
         type(mock_key).__name__ = "KeyCode"
 
-        with patch("mac_agent.key_monitor.keyboard.KeyCode", type(mock_key)):
+        with patch("ble_sender.key_monitor.keyboard.KeyCode", type(mock_key)):
             monitor._on_press(mock_key)
 
         monitor._loop.call_soon_threadsafe.assert_called_once()
@@ -319,7 +319,7 @@ class TestSafePut:
         mock_key.char = "x"
         type(mock_key).__name__ = "KeyCode"
 
-        with patch("mac_agent.key_monitor.keyboard.KeyCode", type(mock_key)):
+        with patch("ble_sender.key_monitor.keyboard.KeyCode", type(mock_key)):
             monitor._on_release(mock_key)
 
         monitor._loop.call_soon_threadsafe.assert_called_once()
@@ -333,7 +333,7 @@ class TestAccessibilityCheck:
     @pytest.mark.asyncio
     async def test_check_accessibility_non_darwin(self) -> None:
         """Test check_accessibility() returns True on non-macOS."""
-        with patch('mac_agent.key_monitor.sys.platform', 'linux'):
+        with patch('ble_sender.key_monitor.sys.platform', 'linux'):
             result = KeyMonitor.check_accessibility()
 
         assert result is True
@@ -341,11 +341,11 @@ class TestAccessibilityCheck:
     @pytest.mark.asyncio
     async def test_check_accessibility_darwin_trusted(self) -> None:
         """Test check_accessibility() returns True if IS_TRUSTED is True."""
-        with patch('mac_agent.key_monitor.sys.platform', 'darwin'):
+        with patch('ble_sender.key_monitor.sys.platform', 'darwin'):
             mock_listener = MagicMock()
             mock_listener.IS_TRUSTED = True
 
-            with patch('mac_agent.key_monitor.keyboard.Listener', mock_listener):
+            with patch('ble_sender.key_monitor.keyboard.Listener', mock_listener):
                 result = KeyMonitor.check_accessibility()
 
         assert result is True
@@ -353,11 +353,11 @@ class TestAccessibilityCheck:
     @pytest.mark.asyncio
     async def test_check_accessibility_darwin_not_trusted(self) -> None:
         """Test check_accessibility() returns False if IS_TRUSTED is False."""
-        with patch('mac_agent.key_monitor.sys.platform', 'darwin'):
+        with patch('ble_sender.key_monitor.sys.platform', 'darwin'):
             mock_listener = MagicMock()
             mock_listener.IS_TRUSTED = False
 
-            with patch('mac_agent.key_monitor.keyboard.Listener', mock_listener):
+            with patch('ble_sender.key_monitor.keyboard.Listener', mock_listener):
                 result = KeyMonitor.check_accessibility()
 
         assert result is False
@@ -365,13 +365,13 @@ class TestAccessibilityCheck:
     @pytest.mark.asyncio
     async def test_check_accessibility_darwin_no_is_trusted(self) -> None:
         """Test check_accessibility() returns True if IS_TRUSTED not available."""
-        with patch('mac_agent.key_monitor.sys.platform', 'darwin'):
+        with patch('ble_sender.key_monitor.sys.platform', 'darwin'):
             mock_listener = MagicMock()
             # Simulate IS_TRUSTED attribute not existing
             if hasattr(mock_listener, 'IS_TRUSTED'):
                 delattr(mock_listener, 'IS_TRUSTED')
 
-            with patch('mac_agent.key_monitor.keyboard.Listener', mock_listener):
+            with patch('ble_sender.key_monitor.keyboard.Listener', mock_listener):
                 result = KeyMonitor.check_accessibility()
 
         assert result is True

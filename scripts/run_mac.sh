@@ -18,7 +18,7 @@ cd "$PROJECT_ROOT"
 
 # デバイス名が指定されている場合
 if [ -n "$1" ]; then
-    PYTHONPATH=src python3 -m mac_agent.main --device "$1"
+    PYTHONPATH=src python3 -m ble_sender.main --device "$1"
 else
-    PYTHONPATH=src python3 -m mac_agent.main
+    PYTHONPATH=src python3 -m ble_sender.main
 fi

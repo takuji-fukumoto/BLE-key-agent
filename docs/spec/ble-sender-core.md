@@ -1,8 +1,8 @@
-# Mac Agent コア（BLE + キー監視）
+# BLE Sender コア（BLE + キー監視）
 
 ## 概要
 
-Mac側のコア機能。pynputによるキーボード入力監視（`KeyMonitor`）と、bleakによるBLE Central通信（`BleClient`）、それらを統合するCLIアプリ（`MacAgent`）で構成。
+BLE送信側のコア機能。pynputによるキーボード入力監視（`KeyMonitor`）と、bleakによるBLE Central通信（`BleClient`）、それらを統合するCLIアプリ（`KeyBleAgent`）で構成。
 
 ## 重要事項
 
@@ -26,7 +26,7 @@ def _safe_put(self, event):
 `ble_client.py`ではbleakを関数内でlazy importしている（`from bleak import BleakScanner`）。これはPi側でもモジュールをimportできるようにするため。
 
 テスト時の注意点:
-- `patch('mac_agent.ble_client.BleakScanner')` は**動かない**（モジュールレベルに属性がない）
+- `patch('ble_sender.ble_client.BleakScanner')` は**動かない**（モジュールレベルに属性がない）
 - `patch('bleak.BleakScanner')` を使うこと
 - テストファイル冒頭で `sys.modules.setdefault("bleak", _bleak_mock)` でモジュールモックを登録
 
@@ -44,11 +44,11 @@ BLE接続が切断された場合、`_on_disconnect` コールバックから `_
 
 ### ハートビートメカニズム
 
-Mac側から3秒間隔でハートビートを送信。Pi側は10秒のタイムアウトで切断検知する（3倍マージン）。キーイベント送信が最近あった場合はハートビートをスキップして不要なBLEトラフィックを削減。
+送信側から3秒間隔でハートビートを送信。受信側は10秒のタイムアウトで切断検知する（3倍マージン）。キーイベント送信が最近あった場合はハートビートをスキップして不要なBLEトラフィックを削減。
 
 ### キーイベントのレート制限
 
-BLE Writeの間隔に最小5ms（`MIN_SEND_INTERVAL_S = 0.005`）を設け、Pi側のバッファオーバーフローを防止。
+BLE Writeの間隔に最小5ms（`MIN_SEND_INTERVAL_S = 0.005`）を設け、受信側のバッファオーバーフローを防止。
 
 ### macOSアクセシビリティ権限
 
@@ -60,10 +60,10 @@ pynputでグローバルキー監視するには、macOSのシステム設定で
 
 ## 関連ファイル
 
-- `src/mac_agent/__init__.py` - パッケージ初期化
-- `src/mac_agent/key_monitor.py` - pynputキー監視
-- `src/mac_agent/ble_client.py` - bleak BLEクライアント
-- `src/mac_agent/main.py` - CLIアプリ（MacAgent）
-- `src/mac_agent/requirements.txt` - 依存パッケージ
+- `src/ble_sender/__init__.py` - パッケージ初期化
+- `src/ble_sender/key_monitor.py` - pynputキー監視
+- `src/ble_sender/ble_client.py` - bleak BLEクライアント
+- `src/ble_sender/main.py` - CLIアプリ（KeyBleAgent）
+- `src/ble_sender/requirements.txt` - 依存パッケージ
 - `tests/test_key_monitor.py` - KeyMonitorテスト
 - `tests/test_ble_client.py` - BleClientテスト

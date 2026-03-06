@@ -1,4 +1,4 @@
-"""Unit tests for mac_agent.agent.KeyBleAgent."""
+"""Unit tests for ble_sender.agent.KeyBleAgent."""
 
 import asyncio
 import sys
@@ -11,9 +11,9 @@ _pynput_mock = MagicMock()
 sys.modules.setdefault("pynput", _pynput_mock)
 sys.modules.setdefault("pynput.keyboard", _pynput_mock.keyboard)
 
-from mac_agent.agent import KeyBleAgent  # noqa: E402
-from mac_agent.api_types import AgentConfig  # noqa: E402
-from mac_agent.ble_client import BleStatus  # noqa: E402
+from ble_sender.agent import KeyBleAgent  # noqa: E402
+from ble_sender.api_types import AgentConfig  # noqa: E402
+from ble_sender.ble_client import BleStatus  # noqa: E402
 from common.protocol import KeyEvent, KeyType  # noqa: E402
 
 
