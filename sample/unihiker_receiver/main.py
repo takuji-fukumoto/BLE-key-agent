@@ -1,6 +1,6 @@
 """Entry point for the UNIHIKER receiver sample application.
 
-This app integrates `raspi_receiver.lib.KeyReceiver` with
+This app integrates `ble_receiver.lib.KeyReceiver` with
 `UnihikerDisplayAdapter`, using an asyncio queue to bridge sync BLE callbacks
 to async GUI updates.
 """
@@ -18,8 +18,8 @@ from logging.handlers import RotatingFileHandler
 from typing import Union
 
 from common.protocol import KeyEvent
-from raspi_receiver.lib.key_receiver import KeyReceiver, KeyReceiverConfig
-from raspi_receiver.lib.types import ConnectionEvent
+from ble_receiver.lib.key_receiver import KeyReceiver, KeyReceiverConfig
+from ble_receiver.lib.types import ConnectionEvent
 
 logger = logging.getLogger(__name__)
 

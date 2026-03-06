@@ -181,11 +181,11 @@ class BleKeyAgentApp:
 
 ### 4.4 外部GUI連携（別リポジトリ）
 
-GUI連携は本リポジトリ外で実装する。本リポジトリは `mac_agent` の公開APIを提供する。
+GUI連携は本リポジトリ外で実装する。本リポジトリは `ble_sender` の公開APIを提供する。
 
 ```python
 # 外部GUI側の想定
-# - mac_agent.KeyBleAgent を初期化
+# - ble_sender.KeyBleAgent を初期化
 # - scan/connect/start/stop をUIイベントに紐付け
 # - on_status_change / on_error / on_key_event を画面更新に反映
 ```
@@ -193,7 +193,7 @@ GUI連携は本リポジトリ外で実装する。本リポジトリは `mac_ag
 ## 5. 起動方法
 
 ```bash
-cd src/mac_agent
+cd src/ble_sender
 pip install -r requirements.txt
 python main.py
 ```
@@ -204,4 +204,4 @@ python main.py
   - システム設定 → プライバシーとセキュリティ → アクセシビリティ
   - ターミナル/IDE/ビルド済みアプリを追加
 - **Bluetooth権限**: 初回スキャン時にシステムダイアログが表示される
-- **外部GUI連携**: GUI側から `mac_agent` の公開APIを呼び出して統合する
+- **外部GUI連携**: GUI側から `ble_sender` の公開APIを呼び出して統合する

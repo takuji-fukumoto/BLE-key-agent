@@ -3,7 +3,7 @@
 ## 概要
 
 UNIHIKER M10 の GUI ライブラリを使った BLE キー受信表示サンプル。
-`raspi_receiver/lib` の `KeyReceiver` を利用し、受信したキーイベントを UNIHIKER の画面に表示する。
+`ble_receiver/lib` の `KeyReceiver` を利用し、受信したキーイベントを UNIHIKER の画面に表示する。
 
 ## 重要事項
 

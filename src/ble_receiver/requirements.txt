@@ -1,0 +1,2 @@
+# BLE GATT server dependency (Linux / macOS)
+bless>=0.3.0

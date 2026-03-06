@@ -66,9 +66,9 @@ sys.modules.setdefault("bless.backends.advertisement", _adv_mock)
 
 ## 関連ファイル
 
-- `src/mac_agent/ble_client.py` - UUIDフィルタ、リトライ、find_device_by_filter
-- `src/mac_agent/api_types.py` - connect_max_attempts, connect_retry_delay設定
-- `src/mac_agent/agent.py` - 設定パラメータの受け渡し
-- `src/raspi_receiver/lib/gatt_server.py` - BlessAdvertisementDataでUUID明示
+- `src/ble_sender/ble_client.py` - UUIDフィルタ、リトライ、find_device_by_filter
+- `src/ble_sender/api_types.py` - connect_max_attempts, connect_retry_delay設定
+- `src/ble_sender/agent.py` - 設定パラメータの受け渡し
+- `src/ble_receiver/lib/gatt_server.py` - BlessAdvertisementDataでUUID明示
 - `tests/test_ble_client.py` - リトライ・フィルタテスト
 - `tests/test_gatt_server.py` - AdvertisementDataテスト

@@ -1,4 +1,4 @@
-"""Unit tests for mac_agent.ble_client module.
+"""Unit tests for ble_sender.ble_client module.
 
 Uses mocks for the bleak library since BLE hardware is not available
 in the test environment. The bleak module is mocked to avoid dependency
@@ -16,7 +16,7 @@ _bleak_mock = MagicMock()
 sys.modules.setdefault("bleak", _bleak_mock)
 sys.modules.setdefault("bleak.backends.device", _bleak_mock.backends.device)
 
-from mac_agent.ble_client import (  # noqa: E402
+from ble_sender.ble_client import (  # noqa: E402
     BleClient,
     BleDevice,
     STATUS_CONNECTED,
@@ -314,7 +314,7 @@ class TestBleClientConnectRetry:
 
         client._connect_once = AsyncMock(side_effect=[False, False, True])
 
-        with patch('mac_agent.ble_client.asyncio.sleep', new_callable=AsyncMock):
+        with patch('ble_sender.ble_client.asyncio.sleep', new_callable=AsyncMock):
             success = await client.connect("AA:BB:CC:DD:EE:FF")
 
         assert success is True
@@ -327,7 +327,7 @@ class TestBleClientConnectRetry:
 
         client._connect_once = AsyncMock(return_value=False)
 
-        with patch('mac_agent.ble_client.asyncio.sleep', new_callable=AsyncMock):
+        with patch('ble_sender.ble_client.asyncio.sleep', new_callable=AsyncMock):
             success = await client.connect("AA:BB:CC:DD:EE:FF")
 
         assert success is False
@@ -341,7 +341,7 @@ class TestBleClientConnectRetry:
 
         client._connect_once = AsyncMock(side_effect=[False, False, True])
 
-        with patch('mac_agent.ble_client.asyncio.sleep', new_callable=AsyncMock) as mock_sleep:
+        with patch('ble_sender.ble_client.asyncio.sleep', new_callable=AsyncMock) as mock_sleep:
             await client.connect("AA:BB:CC:DD:EE:FF")
 
         # Sleep called between attempt 1->2 and 2->3, not after last
@@ -355,7 +355,7 @@ class TestBleClientConnectRetry:
 
         client._connect_once = AsyncMock(return_value=True)
 
-        with patch('mac_agent.ble_client.asyncio.sleep', new_callable=AsyncMock) as mock_sleep:
+        with patch('ble_sender.ble_client.asyncio.sleep', new_callable=AsyncMock) as mock_sleep:
             success = await client.connect("AA:BB:CC:DD:EE:FF")
 
         assert success is True
@@ -379,7 +379,7 @@ class TestBleClientConnectRetry:
         # All attempts fail - verify DISCONNECTED only set once at end
         client._connect_once = AsyncMock(return_value=False)
 
-        with patch('mac_agent.ble_client.asyncio.sleep', new_callable=AsyncMock):
+        with patch('ble_sender.ble_client.asyncio.sleep', new_callable=AsyncMock):
             await client.connect("AA:BB:CC:DD:EE:FF")
 
         # CONNECTING set once at start, DISCONNECTED only at end (not between retries)
@@ -504,7 +504,7 @@ class TestBleClientReconnection:
         # Simulate failed reconnection attempts
         client.connect = AsyncMock(side_effect=[False, False, True])
 
-        with patch('mac_agent.ble_client.asyncio.sleep', side_effect=mock_sleep):
+        with patch('ble_sender.ble_client.asyncio.sleep', side_effect=mock_sleep):
             await client._reconnect_loop()
 
         # Verify exponential backoff: 1s, 2s

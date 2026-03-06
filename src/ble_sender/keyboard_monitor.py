@@ -1,4 +1,4 @@
-"""Library-friendly keyboard monitor wrapper for mac_agent."""
+"""Library-friendly keyboard monitor wrapper for ble_sender."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import asyncio
 from typing import Optional
 
 from common.protocol import KeyEvent
-from mac_agent.key_monitor import KeyMonitor
+from ble_sender.key_monitor import KeyMonitor
 
 
 class KeyboardMonitor:

@@ -1,4 +1,4 @@
-"""Unit tests for raspi_receiver.lib.key_receiver module.
+"""Unit tests for ble_receiver.lib.key_receiver module.
 
 Tests use a mocked GATTServer to verify KeyReceiver's deserialization
 and callback dispatch logic without BLE hardware.
@@ -11,19 +11,19 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from common.protocol import KeyEvent, KeyType, Modifiers
-from raspi_receiver.lib.key_receiver import (
+from ble_receiver.lib.key_receiver import (
     DISCONNECT_TIMEOUT_SEC,
     KeyReceiver,
     KeyReceiverConfig,
     ReceiverStats,
 )
-from raspi_receiver.lib.types import ConnectionEvent
+from ble_receiver.lib.types import ConnectionEvent
 
 
 @pytest.fixture
 def mock_gatt_server():
     """Create a mocked GATTServer that captures the on_write callback."""
-    with patch("raspi_receiver.lib.key_receiver.GATTServer") as mock_cls:
+    with patch("ble_receiver.lib.key_receiver.GATTServer") as mock_cls:
         instance = AsyncMock()
         instance.start = AsyncMock()
         instance.stop = AsyncMock()

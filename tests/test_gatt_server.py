@@ -1,4 +1,4 @@
-"""Unit tests for raspi_receiver.lib.gatt_server module.
+"""Unit tests for ble_receiver.lib.gatt_server module.
 
 Uses mocks for the bless library since BLE hardware is not available
 in the test environment. The bless module is mocked via sys.modules
@@ -23,7 +23,7 @@ sys.modules.setdefault("bless", _bless_mock)
 sys.modules.setdefault("bless.backends", MagicMock())
 sys.modules.setdefault("bless.backends.advertisement", _adv_mock)
 
-from raspi_receiver.lib.gatt_server import GATTServer  # noqa: E402
+from ble_receiver.lib.gatt_server import GATTServer  # noqa: E402
 
 
 @pytest.fixture

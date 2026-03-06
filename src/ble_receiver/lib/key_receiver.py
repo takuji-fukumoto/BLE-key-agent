@@ -24,8 +24,8 @@ from typing import Callable, Optional
 from common.protocol import KeyEvent, KeyType
 from common.uuids import DEVICE_NAME
 
-from raspi_receiver.lib.gatt_server import GATTServer
-from raspi_receiver.lib.types import ConnectionEvent
+from ble_receiver.lib.gatt_server import GATTServer
+from ble_receiver.lib.types import ConnectionEvent
 
 logger = logging.getLogger(__name__)
 

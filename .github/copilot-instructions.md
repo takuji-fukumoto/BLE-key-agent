@@ -23,8 +23,8 @@
 ## ディレクトリ運用ルール
 
 - `src/common/`: Mac/Pi 共有（UUID, プロトコル）
-- `src/mac_agent/`: Mac 側実装
-- `src/raspi_receiver/lib/`: Pi 側ライブラリ（BLE 通信 + キー受信 hook）
+- `src/ble_sender/`: BLE 送信側ライブラリ/CLI
+- `src/ble_receiver/lib/`: BLE 受信側ライブラリ（BLE 通信 + キー受信 hook）
 - `sample/raspi_receiver/apps/`: Pi 側サンプルアプリ実装（LCD 等ハードウェア依存）
 - `poc/`, `reports/` は参照用。原則直接変更しない
 
@@ -53,9 +53,9 @@
 ## 推奨実装順
 
 1. `common/`（UUID, プロトコル）
-2. `raspi_receiver/lib/`（BLE サーバー, キー受信）
+2. `ble_receiver/lib/`（BLE サーバー, キー受信）
 3. `sample/raspi_receiver/apps/lcd_display/`（LCD 表示サンプル）
-4. `mac_agent/` コア（BLE + キー監視）
+4. `ble_sender/` コア（BLE + キー監視）
 5. 外部GUI/利用アプリへの統合（別リポジトリ）
 6. 結合テスト
 

@@ -22,7 +22,7 @@ from logging.handlers import RotatingFileHandler
 from typing import Union
 
 from common.protocol import KeyEvent, KeyType, Modifiers
-from raspi_receiver.lib import ConnectionEvent, KeyReceiver
+from ble_receiver.lib import ConnectionEvent, KeyReceiver
 
 from .config import (
     BUTTON_POLL_INTERVAL_MS,

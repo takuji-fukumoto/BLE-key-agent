@@ -10,11 +10,11 @@
 ```
 Phase 1: 共通定義 (common/)
     ↓
-Phase 2: Pi側ライブラリ (raspi_receiver/lib/)
+Phase 2: Pi側ライブラリ (ble_receiver/lib/)
     ↓
 Phase 3: Pi側LCD表示アプリ (sample/raspi_receiver/apps/lcd_display/)
     ↓
-Phase 4: Mac側コア (mac_agent/ - BLE + KeyMonitor)
+Phase 4: Mac側コア (ble_sender/ - BLE + KeyMonitor)
     ↓
 Phase 5: 外部GUI/利用アプリ連携（別リポジトリ）
     ↓
@@ -37,9 +37,9 @@ Phase 6: 結合テスト・調整
 
 **参照**: [spec-raspi-receiver.md](spec-raspi-receiver.md), [spec-ble-protocol.md](spec-ble-protocol.md)
 
-- `src/raspi_receiver/lib/types.py`: 型定義
-- `src/raspi_receiver/lib/gatt_server.py`: bless GATTサーバー
-- `src/raspi_receiver/lib/key_receiver.py`: コールバック管理
+- `src/ble_receiver/lib/types.py`: 型定義
+- `src/ble_receiver/lib/gatt_server.py`: bless GATTサーバー
+- `src/ble_receiver/lib/key_receiver.py`: コールバック管理
 
 **PoC参照**: `poc/ble_gatt/peripheral_raspi.py`
 
@@ -62,8 +62,8 @@ Phase 6: 結合テスト・調整
 
 **参照**: [spec-mac-agent.md](spec-mac-agent.md) §4
 
-- `src/mac_agent/key_monitor.py`: pynputキー監視
-- `src/mac_agent/ble_client.py`: bleak BLEクライアント
+- `src/ble_sender/key_monitor.py`: pynputキー監視
+- `src/ble_sender/ble_client.py`: bleak BLEクライアント
 
 **PoC参照**: `poc/ble_gatt/central_mac.py`, `poc/pynput/pynput_key_monitor.py`
 
@@ -75,7 +75,7 @@ Phase 6: 結合テスト・調整
 
 **参照**: [spec-mac-agent.md](spec-mac-agent.md) §2, §3
 
-- `src/mac_agent/`: 公開API（`KeyBleAgent`, `BleSender`, `KeyboardMonitor`）
+- `src/ble_sender/`: 公開API（`KeyBleAgent`, `BleSender`, `KeyboardMonitor`）
 - 外部リポジトリ: GUI層/利用アプリ実装
 
 **完了条件:**
@@ -96,9 +96,9 @@ Phase 6: 結合テスト・調整
 | PoCファイル | 本実装での対応先 | 主な変更点 |
 |---|---|---|
 | `poc/ble_gatt/common.py` | `src/common/uuids.py` | そのまま移行 |
-| `poc/ble_gatt/central_mac.py` | `src/mac_agent/ble_client.py` | クラス化、再接続追加 |
-| `poc/ble_gatt/peripheral_raspi.py` | `src/raspi_receiver/lib/gatt_server.py` | クラス化、コールバック分離 |
-| `poc/pynput/pynput_key_monitor.py` | `src/mac_agent/key_monitor.py` | インターフェース整理 |
+| `poc/ble_gatt/central_mac.py` | `src/ble_sender/ble_client.py` | クラス化、再接続追加 |
+| `poc/ble_gatt/peripheral_raspi.py` | `src/ble_receiver/lib/gatt_server.py` | クラス化、コールバック分離 |
+| `poc/pynput/pynput_key_monitor.py` | `src/ble_sender/key_monitor.py` | インターフェース整理 |
 
 ## 3. 技術リファレンス
 
@@ -134,5 +134,5 @@ Phase 6: 結合テスト・調整
 - **blessを使用する**: Pi側のBLEサーバーはblessライブラリを使う（D-Bus直接操作は不要）
 - **Write Without Response優先**: 低レイテンシのためWriteよりWrite Without Responseを優先
 - **pynputのスレッド**: pynputは別スレッドで動作する。asyncio.Queueでイベントループに橋渡しする
-- **外部GUI連携**: 本リポジトリはGUIを持たない。GUI側では `mac_agent` 公開APIを呼び出して統合する
+- **外部GUI連携**: 本リポジトリはGUIを持たない。GUI側では `ble_sender` 公開APIを呼び出して統合する
 - **LCD描画のブロッキング**: SPI通信は同期的。長時間ブロックしないよう描画頻度を制御する
