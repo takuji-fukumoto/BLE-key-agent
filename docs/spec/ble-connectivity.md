@@ -13,8 +13,8 @@ macOSのCoreBluetooth（bleakバックエンド）はMACアドレスではなく
 `BleakScanner.discover(service_uuids=[...])`を使うとOSレベルでフィルタが効き、
 デバイス発見率が大幅に向上する。デバイス名マッチよりも確実。
 
-Peripheral側が`BlessAdvertisementData(service_uuids=[...])`でService UUIDを
-Advertisingパケットに含めていないと、Central側のUUIDフィルタが機能しない。
+Peripheral側が`add_gatt()`で登録したService UUIDは、bless 0.3.0では`start()`時に
+自動的にAdvertisingパケットに含まれる。Central側のUUIDフィルタが機能するには、
 Mac側・Pi側は必ずセットで対応する必要がある。
 
 ### find_device_by_filter vs find_device_by_address
@@ -51,24 +51,18 @@ bless PR #111でデフォルトが100msに変更済み。明示的な設定は�
 ### テストでのblessモック
 
 blessはPi専用依存のため、テスト時は`sys.modules.setdefault()`でモックする。
-`bless.backends.advertisement`のサブモジュールも個別にモックが必要。
 
 ```python
 _bless_mock = MagicMock()
-_adv_mock = MagicMock()
 sys.modules.setdefault("bless", _bless_mock)
 sys.modules.setdefault("bless.backends", MagicMock())
-sys.modules.setdefault("bless.backends.advertisement", _adv_mock)
 ```
-
-モジュールレベルモックは複数テストで共有されるため、
-テスト内で`reset_mock()`を呼んでクロス汚染を防ぐ必要がある。
 
 ## 関連ファイル
 
 - `src/ble_sender/ble_client.py` - UUIDフィルタ、リトライ、find_device_by_filter
 - `src/ble_sender/api_types.py` - connect_max_attempts, connect_retry_delay設定
 - `src/ble_sender/agent.py` - 設定パラメータの受け渡し
-- `src/ble_receiver/lib/gatt_server.py` - BlessAdvertisementDataでUUID明示
+- `src/ble_receiver/lib/gatt_server.py` - GATTサービス登録とAdvertising
 - `tests/test_ble_client.py` - リトライ・フィルタテスト
-- `tests/test_gatt_server.py` - AdvertisementDataテスト
+- `tests/test_gatt_server.py` - GATTServerテスト

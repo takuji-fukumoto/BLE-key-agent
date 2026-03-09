@@ -109,6 +109,7 @@ class BleClient:
         self._reconnect_backoff_multiplier = reconnect_backoff_multiplier
         self._connect_max_attempts = connect_max_attempts
         self._connect_retry_delay = connect_retry_delay
+        self._intentional_disconnect: bool = False
 
     @property
     def status(self) -> BleStatus:
@@ -301,6 +302,8 @@ class BleClient:
 
         Cancels any pending reconnection attempts.
         """
+        self._intentional_disconnect = True
+
         # Cancel reconnection if running
         if self._reconnect_task is not None:
             self._reconnect_task.cancel()
@@ -321,6 +324,7 @@ class BleClient:
                 self._connected_device = None
 
         self._set_status(STATUS_DISCONNECTED)
+        self._intentional_disconnect = False
 
     def _verify_key_service(self, client: BleakClientType) -> bool:
         """Verify client has KEY_SERVICE_UUID and KEY_CHAR_UUID.
@@ -372,23 +376,34 @@ class BleClient:
         """Bleak disconnection callback (runs in event loop).
 
         Triggers automatic reconnection if a previous address is stored.
+        Skips reconnection when disconnect was intentional.
 
         Args:
             client: Disconnected BleakClient instance.
         """
-        logger.warning("BLE connection lost")
-        self._client = None
+        try:
+            logger.warning("BLE connection lost")
+            self._client = None
 
-        # Start reconnection if we have a last address
-        if self._last_address is not None:
-            if self._reconnect_task and not self._reconnect_task.done():
-                logger.debug("Reconnect task already running, skipping")
+            # Skip reconnection on intentional disconnect
+            if self._intentional_disconnect:
+                self._intentional_disconnect = False
+                self._set_status(STATUS_DISCONNECTED)
                 return
-            loop = asyncio.get_running_loop()
-            self._reconnect_task = loop.create_task(
-                self._reconnect_loop()
-            )
-        else:
+
+            # Start reconnection if we have a last address
+            if self._last_address is not None:
+                if self._reconnect_task and not self._reconnect_task.done():
+                    logger.debug("Reconnect task already running, skipping")
+                    return
+                loop = asyncio.get_running_loop()
+                self._reconnect_task = loop.create_task(
+                    self._reconnect_loop()
+                )
+            else:
+                self._set_status(STATUS_DISCONNECTED)
+        except Exception:
+            logger.exception("Error in disconnect callback")
             self._set_status(STATUS_DISCONNECTED)
 
     async def _reconnect_loop(self) -> None:
@@ -410,24 +425,36 @@ class BleClient:
         backoff_multiplier = self._reconnect_backoff_multiplier
 
         attempt = 0
-        while True:
-            attempt += 1
-            logger.info(
-                "Reconnection attempt %d in %.1fs to %s",
-                attempt,
-                delay,
-                self._last_address
-            )
+        try:
+            while True:
+                attempt += 1
+                logger.info(
+                    "Reconnection attempt %d in %.1fs to %s",
+                    attempt,
+                    delay,
+                    self._last_address
+                )
 
-            await asyncio.sleep(delay)
+                await asyncio.sleep(delay)
 
-            success = await self.connect(self._last_address)
-            if success:
-                logger.info("Reconnection successful after %d attempts", attempt)
-                return  # Exit loop
+                success = await self.connect(self._last_address)
+                if success:
+                    logger.info(
+                        "Reconnection successful after %d attempts", attempt
+                    )
+                    return
 
-            # Exponential backoff
-            delay = min(delay * backoff_multiplier, max_delay)
+                # Restore RECONNECTING status after failed connect()
+                self._set_status(STATUS_RECONNECTING)
+
+                # Exponential backoff
+                delay = min(delay * backoff_multiplier, max_delay)
+        except asyncio.CancelledError:
+            logger.debug("Reconnect loop cancelled")
+            raise
+        except Exception:
+            logger.exception("Unexpected error in reconnect loop")
+            self._set_status(STATUS_DISCONNECTED)
 
 
 class BleSender(BleClient):

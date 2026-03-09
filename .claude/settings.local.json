@@ -11,7 +11,9 @@
       "Bash(gh auth status:*)",
       "Bash(wc:*)",
       "Bash(PYTHONPATH=src python -m pytest tests/test_protocol.py -v)",
-      "Bash(PYTHONPATH=src python -m pytest tests/test_key_receiver.py -v)"
+      "Bash(PYTHONPATH=src python -m pytest tests/test_key_receiver.py -v)",
+      "Bash(gh api 'repos/kevincar/bless/contents/bless/backends/server.py?ref=v0.2.6' --jq '.content')",
+      "Bash(gh api 'repos/kevincar/bless/contents/bless/__init__.py?ref=v0.2.6' --jq '.content')"
     ]
   }
 }

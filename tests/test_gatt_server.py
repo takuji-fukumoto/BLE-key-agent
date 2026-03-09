@@ -17,11 +17,8 @@ _bless_mock.GATTCharacteristicProperties.write_without_response = 0x04
 _bless_mock.GATTAttributePermissions.readable = 0x01
 _bless_mock.GATTAttributePermissions.writeable = 0x02
 
-_adv_mock = MagicMock()
-
 sys.modules.setdefault("bless", _bless_mock)
 sys.modules.setdefault("bless.backends", MagicMock())
-sys.modules.setdefault("bless.backends.advertisement", _adv_mock)
 
 from ble_receiver.lib.gatt_server import GATTServer  # noqa: E402
 
@@ -130,29 +127,14 @@ class TestGATTServerStart:
         assert KEY_CHAR_UUID in gatt_arg[KEY_SERVICE_UUID]
 
     @pytest.mark.asyncio
-    async def test_start_passes_advertisement_data(
+    async def test_start_calls_server_start_without_advertisement_data(
         self, mock_bless_server
     ) -> None:
-        """Test start() passes BlessAdvertisementData with service UUID."""
-        from common.uuids import KEY_SERVICE_UUID
-
-        # Reset the module-level mock to avoid cross-test contamination
-        _adv_mock.BlessAdvertisementData.reset_mock()
-
+        """Test start() calls BlessServer.start() without advertisement_data."""
         server = GATTServer()
         await server.start()
 
-        mock_bless_server.start.assert_called_once()
-        call_kwargs = mock_bless_server.start.call_args.kwargs
-        adv_data = call_kwargs.get("advertisement_data")
-        assert adv_data is not None
-
-        # Verify BlessAdvertisementData was constructed with correct args
-        adv_constructor = _adv_mock.BlessAdvertisementData
-        adv_constructor.assert_called_once_with(
-            local_name="BLEKeyReceiver",
-            service_uuids=[KEY_SERVICE_UUID],
-        )
+        mock_bless_server.start.assert_called_once_with()
 
 
 class TestGATTServerStop:

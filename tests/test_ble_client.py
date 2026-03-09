@@ -43,6 +43,7 @@ class TestBleClientInit:
         assert client._connected_device is None
         assert client._reconnect_task is None
         assert client._last_address is None
+        assert client._intentional_disconnect is False
 
     def test_status_property(self) -> None:
         """Test status property returns current status."""
@@ -537,6 +538,178 @@ class TestBleClientReconnection:
 
         assert client._reconnect_task is mock_task
         mock_event_loop.create_task.assert_called_once()
+
+
+class TestIntentionalDisconnect:
+    """Tests for intentional disconnect flag (Bug 1 fix)."""
+
+    @pytest.mark.asyncio
+    async def test_disconnect_sets_intentional_flag(self) -> None:
+        """Test _intentional_disconnect is True during bleak disconnect call."""
+        client = BleClient()
+
+        flag_during_disconnect = []
+        mock_bleak_client = AsyncMock()
+
+        async def capture_flag():
+            flag_during_disconnect.append(client._intentional_disconnect)
+
+        mock_bleak_client.disconnect = capture_flag
+        client._client = mock_bleak_client
+        client._connected_device = BleDevice("Test", "AA:BB:CC:DD:EE:FF", -50)
+
+        await client.disconnect()
+
+        assert flag_during_disconnect == [True]
+
+    @pytest.mark.asyncio
+    async def test_on_disconnect_skips_reconnect_when_intentional(self) -> None:
+        """Test _on_disconnect skips reconnection when flag is True."""
+        client = BleClient()
+        client._intentional_disconnect = True
+        client._last_address = "AA:BB:CC:DD:EE:FF"
+
+        mock_client = MagicMock()
+        client._on_disconnect(mock_client)
+
+        assert client._reconnect_task is None
+        assert client._intentional_disconnect is False
+        assert client.status == STATUS_DISCONNECTED
+
+    @pytest.mark.asyncio
+    async def test_on_disconnect_starts_reconnect_when_not_intentional(self) -> None:
+        """Test _on_disconnect starts reconnection when flag is False."""
+        client = BleClient()
+        client._intentional_disconnect = False
+        client._last_address = "AA:BB:CC:DD:EE:FF"
+
+        mock_client = MagicMock()
+
+        with patch.object(asyncio, 'get_running_loop') as mock_loop:
+            mock_event_loop = MagicMock()
+            mock_task = MagicMock()
+            mock_event_loop.create_task = MagicMock(return_value=mock_task)
+            mock_loop.return_value = mock_event_loop
+
+            client._on_disconnect(mock_client)
+
+            reconnect_coro = mock_event_loop.create_task.call_args.args[0]
+            reconnect_coro.close()
+
+        assert client._reconnect_task is mock_task
+
+    @pytest.mark.asyncio
+    async def test_intentional_disconnect_flag_reset_after_disconnect(self) -> None:
+        """Test _intentional_disconnect is reset to False after disconnect()."""
+        client = BleClient()
+        await client.disconnect()
+
+        assert client._intentional_disconnect is False
+
+
+class TestReconnectStatusRestore:
+    """Tests for status restoration during reconnect loop (Bug 2 fix)."""
+
+    @pytest.mark.asyncio
+    async def test_reconnect_loop_restores_reconnecting_status(self) -> None:
+        """Test status is restored to RECONNECTING after failed connect()."""
+        status_changes = []
+
+        def track_status(status):
+            status_changes.append(status)
+
+        client = BleClient(on_status_change=track_status)
+        client._last_address = "AA:BB:CC:DD:EE:FF"
+
+        client.connect = AsyncMock(side_effect=[False, True])
+
+        async def noop_sleep(delay):
+            pass
+
+        with patch('ble_sender.ble_client.asyncio.sleep', side_effect=noop_sleep):
+            await client._reconnect_loop()
+
+        # After failed connect(), RECONNECTING should be restored
+        assert STATUS_RECONNECTING in status_changes
+        # RECONNECTING should appear after the first failed attempt
+        reconnecting_indices = [
+            i for i, s in enumerate(status_changes) if s == STATUS_RECONNECTING
+        ]
+        assert len(reconnecting_indices) >= 2  # initial + after first failure
+
+
+class TestOnDisconnectExceptionHandling:
+    """Tests for _on_disconnect exception handling (Bug 3 fix)."""
+
+    def test_on_disconnect_handles_get_running_loop_error(self) -> None:
+        """Test _on_disconnect handles get_running_loop RuntimeError."""
+        client = BleClient()
+        client._last_address = "AA:BB:CC:DD:EE:FF"
+
+        mock_client = MagicMock()
+
+        with patch.object(
+            asyncio, 'get_running_loop',
+            side_effect=RuntimeError("no running event loop")
+        ):
+            # Should not raise
+            client._on_disconnect(mock_client)
+
+        assert client.status == STATUS_DISCONNECTED
+
+    def test_on_disconnect_handles_create_task_error(self) -> None:
+        """Test _on_disconnect handles create_task error."""
+        client = BleClient()
+        client._last_address = "AA:BB:CC:DD:EE:FF"
+
+        mock_client = MagicMock()
+
+        with patch.object(asyncio, 'get_running_loop') as mock_loop:
+            mock_event_loop = MagicMock()
+            mock_event_loop.create_task = MagicMock(
+                side_effect=RuntimeError("loop is closed")
+            )
+            mock_loop.return_value = mock_event_loop
+
+            # Should not raise
+            client._on_disconnect(mock_client)
+
+        assert client.status == STATUS_DISCONNECTED
+
+
+class TestReconnectLoopExceptionHandling:
+    """Tests for _reconnect_loop exception handling (Bug 4 fix)."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.filterwarnings("ignore::RuntimeWarning")
+    async def test_reconnect_loop_handles_unexpected_exception(self) -> None:
+        """Test _reconnect_loop handles unexpected exceptions gracefully."""
+        client = BleClient()
+        client._last_address = "AA:BB:CC:DD:EE:FF"
+
+        client.connect = AsyncMock(side_effect=RuntimeError("unexpected"))
+
+        with patch(
+            'ble_sender.ble_client.asyncio.sleep', new_callable=AsyncMock
+        ):
+            # Should not raise
+            await client._reconnect_loop()
+
+        assert client.status == STATUS_DISCONNECTED
+
+    @pytest.mark.asyncio
+    async def test_reconnect_loop_reraises_cancelled_error(self) -> None:
+        """Test _reconnect_loop re-raises CancelledError."""
+        client = BleClient()
+        client._last_address = "AA:BB:CC:DD:EE:FF"
+
+        with patch(
+            'ble_sender.ble_client.asyncio.sleep',
+            new_callable=AsyncMock,
+            side_effect=asyncio.CancelledError,
+        ):
+            with pytest.raises(asyncio.CancelledError):
+                await client._reconnect_loop()
 
 
 class TestCallbackExceptionIsolation:
