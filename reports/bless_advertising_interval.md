@@ -10,21 +10,15 @@ macOSではCoreBluetooth自体が間隔制御を許可しない。
 
 ## 現状の仕様
 
-### bless公開API (`BlessAdvertisementData`)
+### bless 0.3.0 公開API
 
-```python
-@dataclass
-class BlessAdvertisementData:
-    local_name: Optional[str] = None
-    service_uuids: Optional[List[str]] = None
-    manufacturer_data: Optional[Dict[int, bytes]] = None
-    service_data: Optional[Dict[str, bytes]] = None
-    is_connectable: Optional[bool] = None
-    is_discoverable: Optional[bool] = None
-    tx_power: Optional[int] = None
-```
+bless 0.3.0（PyPIリリース版）にはAdvertisementをカスタマイズする公開APIは存在しない。
+`BlessAdvertisementData` クラスはGitHub mainブランチにのみ存在し、未リリース。
 
-`min_interval` / `max_interval` フィールドは存在しない。
+`BlessServer.start(**kwargs)` を呼ぶと、`add_gatt()` で登録済みのサービスが
+自動的にAdvertisingされる。デバイス名は `BlessServer(name=...)` コンストラクタで設定。
+
+`min_interval` / `max_interval` を公開APIから設定する手段はない。
 
 ### 内部実装 (BlueZ/D-Bus)
 
@@ -84,7 +78,7 @@ BlueZLEAdvertisement.__init__ = _patched_init
 
 ### 方法B: blessをフォーク
 
-`BlessAdvertisementData` に `min_interval`, `max_interval` を追加し、
+未リリースの `BlessAdvertisementData` に `min_interval`, `max_interval` を追加し、
 `BlueZGattApplication.start_advertising()` で値を伝播させる。
 
 - メリット: 最もクリーンな実装

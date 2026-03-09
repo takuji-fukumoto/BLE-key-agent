@@ -79,25 +79,25 @@ Bug 2（ステータス復元）と Bug 4（例外ハンドリング）は同じ
 ## Phase4: テスト
 
 ### Bug 1 テスト
-- [ ] [Phase4] `test_disconnect_sets_intentional_flag` — disconnect 中にフラグが True であることを検証
-- [ ] [Phase4] `test_on_disconnect_skips_reconnect_when_intentional` — フラグ True 時に再接続タスクが作られないことを検証
-- [ ] [Phase4] `test_on_disconnect_starts_reconnect_when_not_intentional` — フラグ False 時に再接続が開始されることを検証
-- [ ] [Phase4] `test_intentional_disconnect_flag_reset_after_disconnect` — disconnect 後にフラグがリセットされることを検証
+- [x] [Phase4] `test_disconnect_sets_intentional_flag` — disconnect 中にフラグが True であることを検証
+- [x] [Phase4] `test_on_disconnect_skips_reconnect_when_intentional` — フラグ True 時に再接続タスクが作られないことを検証
+- [x] [Phase4] `test_on_disconnect_starts_reconnect_when_not_intentional` — フラグ False 時に再接続が開始されることを検証
+- [x] [Phase4] `test_intentional_disconnect_flag_reset_after_disconnect` — disconnect 後にフラグがリセットされることを検証
 
 ### Bug 2 テスト
-- [ ] [Phase4] `test_reconnect_loop_restores_reconnecting_status` — connect 失敗後にステータスが RECONNECTING に戻ることを検証
+- [x] [Phase4] `test_reconnect_loop_restores_reconnecting_status` — connect 失敗後にステータスが RECONNECTING に戻ることを検証
 
 ### Bug 3 テスト
-- [ ] [Phase4] `test_on_disconnect_handles_get_running_loop_error` — get_running_loop 例外時にクラッシュしないことを検証
-- [ ] [Phase4] `test_on_disconnect_handles_create_task_error` — create_task 例外時にクラッシュしないことを検証
+- [x] [Phase4] `test_on_disconnect_handles_get_running_loop_error` — get_running_loop 例外時にクラッシュしないことを検証
+- [x] [Phase4] `test_on_disconnect_handles_create_task_error` — create_task 例外時にクラッシュしないことを検証
 
 ### Bug 4 テスト
-- [ ] [Phase4] `test_reconnect_loop_handles_unexpected_exception` — 予期せぬ例外でクラッシュしないことを検証
-- [ ] [Phase4] `test_reconnect_loop_reraises_cancelled_error` — CancelledError が re-raise されることを検証
+- [x] [Phase4] `test_reconnect_loop_handles_unexpected_exception` — 予期せぬ例外でクラッシュしないことを検証
+- [x] [Phase4] `test_reconnect_loop_reraises_cancelled_error` — CancelledError が re-raise されることを検証
 
 ### 既存テスト更新
-- [ ] [Phase4] `test_initialization` に `_intentional_disconnect` のデフォルト値チェック追加
-- [ ] [Phase4] 全テスト実行・パス確認
+- [x] [Phase4] `test_initialization` に `_intentional_disconnect` のデフォルト値チェック追加
+- [x] [Phase4] 全テスト実行・パス確認（37 passed）
 
 ## Phase5: 仕上げ
 
